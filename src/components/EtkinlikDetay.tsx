@@ -111,6 +111,12 @@ export function EtkinlikDetay() {
           <div className="border-b pb-4 mb-6">
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-800">{basvuru.etkinlikAdi}</h1>
             <p className="text-lg text-blue-600">{basvuru.kulupAdi}</p>
+            {basvuru.etkinlikTuru && (
+              <p className="text-sm text-gray-600 mt-1">
+                Tür: {basvuru.etkinlikTuru}
+                {basvuru.etkinlikTuru === 'Diğer' && basvuru.digerTuruAciklama ? ` — ${basvuru.digerTuruAciklama}` : ''}
+              </p>
+            )}
             
             <div className="mt-4 flex flex-wrap gap-4">
               <div className="flex items-center text-gray-600">

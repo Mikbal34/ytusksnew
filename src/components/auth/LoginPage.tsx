@@ -67,8 +67,11 @@ const LoginPage: React.FC = () => {
             className="h-20 mx-auto" 
           />
           <h2 className="mt-6 text-center text-2xl font-extrabold text-gray-900">
-            SKS Sistemi Giriş
+            Öğrenci Kulüpleri Yönetim Paneli
           </h2>
+          <p className="mt-2 text-center text-gray-600 text-sm">
+            Öğrenci Kulüpleri Yönetim Paneli'ne erişmek için giriş yapınız.
+          </p>
         </div>
         
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>

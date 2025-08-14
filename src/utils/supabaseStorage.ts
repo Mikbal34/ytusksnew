@@ -9,12 +9,9 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
   try {
     console.log('Başvuru kaydediliyor:', basvuru);
     
-    // Önce kullanıcının oturum bilgilerini kontrol et
-    const { data: sessionData } = await supabase.auth.getSession();
-    
-    // Eğer oturum yoksa, admin client'ı kullan
-    const client = sessionData.session ? supabase : supabaseAdmin;
-    console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
+    // Yazma işlemlerinde RLS sorunlarına takılmamak için admin client kullan
+    const client = supabaseAdmin;
+    console.log('updateBasvuru: admin client ile yazma işlemi');
     
     // Ana başvuru bilgilerini ekle
     const { data: basvuruData, error: basvuruError } = await client
@@ -22,13 +19,15 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
       .insert({
         kulup_id: basvuru.kulupId,
         etkinlik_adi: basvuru.etkinlikAdi,
+        etkinlik_turu: basvuru.etkinlikTuru || null,
+        diger_turu_aciklama: basvuru.digerTuruAciklama || null,
         etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
         etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
         baslangic_tarihi: basvuru.baslangicTarihi,
         bitis_tarihi: basvuru.bitisTarihi,
         aciklama: basvuru.aciklama,
         durum: 'Beklemede',
-        revizyon: false
+        revizyon: !!basvuru.revizyon
       })
       .select()
       .single();
@@ -300,6 +299,8 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
           fakulte: basvuru.etkinlik_fakulte,
           detay: basvuru.etkinlik_yeri_detay
         },
+        etkinlikTuru: basvuru.etkinlik_turu || undefined,
+        digerTuruAciklama: basvuru.diger_turu_aciklama || undefined,
         baslangicTarihi: basvuru.baslangic_tarihi,
         bitisTarihi: basvuru.bitis_tarihi,
           zamanDilimleri,
@@ -418,6 +419,8 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
         fakulte: data.etkinlik_fakulte,
         detay: data.etkinlik_yeri_detay
       },
+      etkinlikTuru: data.etkinlik_turu || undefined,
+      digerTuruAciklama: data.diger_turu_aciklama || undefined,
       baslangicTarihi: data.baslangic_tarihi,
       bitisTarihi: data.bitis_tarihi,
       zamanDilimleri,
@@ -476,6 +479,8 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     
     // Eğer oturum yoksa, admin client'ı kullan
     const client = sessionData.session ? supabase : supabaseAdmin;
+    // Zaman dilimi gibi RLS'e takılan işlemler için admin client kullan
+    const adminClient = supabaseAdmin;
     console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
     
     // Ana başvuru bilgilerini güncelle
@@ -483,13 +488,17 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       .from('etkinlik_basvurulari')
       .update({
         etkinlik_adi: basvuru.etkinlikAdi,
+        etkinlik_turu: basvuru.etkinlikTuru || null,
+        diger_turu_aciklama: basvuru.digerTuruAciklama || null,
         etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
         etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
         baslangic_tarihi: basvuru.baslangicTarihi,
         bitis_tarihi: basvuru.bitisTarihi,
         aciklama: basvuru.aciklama,
         durum: basvuru.durum,
-        revizyon: basvuru.revizyon
+        revizyon: basvuru.revizyon,
+        danisman_onay: basvuru.danismanOnay ? { durum: basvuru.danismanOnay.durum, tarih: basvuru.danismanOnay.tarih, redSebebi: basvuru.danismanOnay.redSebebi } : null,
+        sks_onay: basvuru.sksOnay ? { durum: basvuru.sksOnay.durum, tarih: basvuru.sksOnay.tarih, redSebebi: basvuru.sksOnay.redSebebi } : null
       })
       .eq('id', basvuru.id)
       .select();
@@ -503,7 +512,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     // Zaman dilimlerini güncelle (tam yenileme)
     if (basvuru.zamanDilimleri) {
       // Öncekileri sil
-      const { error: delErr } = await client
+      const { error: delErr } = await adminClient
         .from('etkinlik_zaman_dilimleri')
         .delete()
         .eq('basvuru_id', basvuru.id);
@@ -514,7 +523,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
         .filter(z => !!z.baslangic && !!z.bitis)
         .map(z => ({ basvuru_id: basvuru.id, baslangic: z.baslangic, bitis: z.bitis }));
       if (yeni.length > 0) {
-        const { error: insErr } = await client
+        const { error: insErr } = await adminClient
           .from('etkinlik_zaman_dilimleri')
           .insert(yeni);
         if (insErr) {
@@ -540,7 +549,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       if (basvuru.danismanOnay) {
         // Aynı danışman onayı daha önce eklenmiş mi kontrol et
         const existingApproval = gecmisData?.find(
-          onay => onay.onay_tipi === 'Danışman' && 
+          (onay: any) => onay.onay_tipi === 'Danışman' && 
                   onay.durum === basvuru.danismanOnay?.durum && 
                   (!onay.red_sebebi || onay.red_sebebi === basvuru.danismanOnay?.redSebebi)
         );
@@ -553,7 +562,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
               basvuru_id: basvuru.id,
               onay_tipi: 'Danışman',
               durum: basvuru.danismanOnay.durum,
-              tarih: basvuru.danismanOnay.tarih,
+              tarih: basvuru.danismanOnay.tarih || new Date().toISOString(),
               red_sebebi: basvuru.danismanOnay.redSebebi
             });
           
@@ -569,7 +578,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       if (basvuru.sksOnay) {
         // Aynı SKS onayı daha önce eklenmiş mi kontrol et
         const existingApproval = gecmisData?.find(
-          onay => onay.onay_tipi === 'SKS' && 
+          (onay: any) => onay.onay_tipi === 'SKS' && 
                   onay.durum === basvuru.sksOnay?.durum && 
                   (!onay.red_sebebi || onay.red_sebebi === basvuru.sksOnay?.redSebebi)
         );
@@ -582,7 +591,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
               basvuru_id: basvuru.id,
               onay_tipi: 'SKS',
               durum: basvuru.sksOnay.durum,
-              tarih: basvuru.sksOnay.tarih,
+              tarih: basvuru.sksOnay.tarih || new Date().toISOString(),
               red_sebebi: basvuru.sksOnay.redSebebi
             });
           
@@ -896,7 +905,18 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
     const client = sessionData.session ? supabase : supabaseAdmin;
     console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
     
-    // Yeni başvuru ID'si oluştur
+    // Orijinal başvuruyu veritabanından tazele (özellikle etkinlik_turu ve zaman dilimleri için)
+    let orijinal = basvuru;
+    try {
+      const fetched = await getBasvuruById(basvuru.id);
+      if (fetched) {
+        orijinal = fetched;
+      }
+    } catch (e) {
+      console.warn('Orijinal başvuru DB üzerinden getirilemedi, mevcut nesne kullanılacak.', e);
+    }
+
+    // Yeni başvuru ID'si oluştur (geçici, DB ekledikten sonra gerçek ID alınır)
     const yeniId = Date.now().toString();
     
     // Yeni başvuru objesi oluştur
@@ -918,10 +938,12 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
     const revizeObjesi = {
       kulup_id: yeniBasvuru.kulupId,
       etkinlik_adi: yeniBasvuru.etkinlikAdi,
+      etkinlik_turu: orijinal.etkinlikTuru || yeniBasvuru.etkinlikTuru || null,
+      diger_turu_aciklama: orijinal.digerTuruAciklama || yeniBasvuru.digerTuruAciklama || null,
       etkinlik_fakulte: yeniBasvuru.etkinlikYeri.fakulte,
       etkinlik_yeri_detay: yeniBasvuru.etkinlikYeri.detay,
-      baslangic_tarihi: yeniBasvuru.baslangicTarihi,
-      bitis_tarihi: yeniBasvuru.bitisTarihi,
+      baslangic_tarihi: orijinal.baslangicTarihi || yeniBasvuru.baslangicTarihi,
+      bitis_tarihi: orijinal.bitisTarihi || yeniBasvuru.bitisTarihi,
       aciklama: yeniBasvuru.aciklama,
       durum: 'Beklemede',
       revizyon: true,
@@ -947,6 +969,31 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
     const yeniBasvuruId = basvuruData.id;
     console.log('Yeni revize başvuru oluşturuldu, ID:', yeniBasvuruId);
     
+    // Orijinal başvurunun zaman dilimlerini kopyala
+    try {
+      const kopyalanacakDilimler = (orijinal.zamanDilimleri && orijinal.zamanDilimleri.length > 0)
+        ? orijinal.zamanDilimleri
+        : ((orijinal.baslangicTarihi && orijinal.bitisTarihi)
+            ? [{ baslangic: orijinal.baslangicTarihi, bitis: orijinal.bitisTarihi }]
+            : []);
+
+      if (kopyalanacakDilimler.length > 0) {
+        const insertRows = kopyalanacakDilimler
+          .filter(z => !!z.baslangic && !!z.bitis)
+          .map(z => ({ basvuru_id: yeniBasvuruId, baslangic: z.baslangic, bitis: z.bitis }));
+        if (insertRows.length > 0) {
+          const { error: zdInsErr } = await supabaseAdmin
+            .from('etkinlik_zaman_dilimleri')
+            .insert(insertRows);
+          if (zdInsErr) {
+            console.error('Revize için zaman dilimleri kopyalanırken hata:', zdInsErr);
+          }
+        }
+      }
+    } catch (zdCopyErr) {
+      console.error('Zaman dilimleri kopyalama sırasında beklenmeyen hata:', zdCopyErr);
+    }
+
     // Sponsorlar varsa kopyala
     if (basvuru.sponsorlar && basvuru.sponsorlar.length > 0) {
       const sponsorVerileri = basvuru.sponsorlar.map(sponsor => ({

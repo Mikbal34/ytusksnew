@@ -103,7 +103,7 @@ const DanismanLoginPage: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Akademik Danışman Girişi</h2>
           <p className="mt-2 text-center text-gray-600">
-            YTÜ SKS Danışman Paneline erişmek için giriş yapın
+            Öğrenci Kulüpleri Yönetim Paneli'ne erişmek için giriş yapınız.
           </p>
         </div>
 

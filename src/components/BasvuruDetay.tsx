@@ -64,8 +64,11 @@ export function BasvuruDetay({
               danismanOnay.durum === 'Onaylandı' ? (
                 <CheckCircle className="w-4 h-4 text-green-500" />
               ) : (
-                <span title={danismanOnay.redSebebi || 'Reddedildi'}>
+                <span title={danismanOnay.redSebebi || 'Reddedildi'} className="flex items-center gap-1">
                   <XCircle className="w-4 h-4 text-red-500" />
+                  {isUserDanisman && danismanOnay.redSebebi && (
+                    <span className="text-[11px] text-red-600">Red: {danismanOnay.redSebebi}</span>
+                  )}
                 </span>
               )
             ) : (
@@ -79,8 +82,11 @@ export function BasvuruDetay({
               sksOnay.durum === 'Onaylandı' ? (
                 <CheckCircle className="w-4 h-4 text-green-500" />
               ) : (
-                <span title={sksOnay.redSebebi || 'Reddedildi'}>
+                <span title={sksOnay.redSebebi || 'Reddedildi'} className="flex items-center gap-1">
                   <XCircle className="w-4 h-4 text-red-500" />
+                  {isUserSKS && sksOnay.redSebebi && (
+                    <span className="text-[11px] text-red-600">Red: {sksOnay.redSebebi}</span>
+                  )}
                 </span>
               )
             ) : (
@@ -174,6 +180,18 @@ export function BasvuruDetay({
           <label className="block text-sm font-medium text-gray-700">Etkinlik Adı</label>
           <div className="mt-1 text-gray-900">{basvuru.etkinlikAdi}</div>
         </div>
+
+        {basvuru.etkinlikTuru && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Etkinlik Türü</label>
+            <div className="mt-1 text-gray-900">
+              {basvuru.etkinlikTuru}
+              {basvuru.etkinlikTuru === 'Diğer' && basvuru.digerTuruAciklama ? (
+                <span className="text-gray-600"> — {basvuru.digerTuruAciklama}</span>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         {basvuru.etkinlikYeri && (
           <div>

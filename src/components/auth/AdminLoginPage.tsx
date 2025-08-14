@@ -70,7 +70,7 @@ const AdminLoginPage: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-gray-800">Admin Girişi</h2>
           <p className="mt-2 text-center text-gray-600">
-            YTÜ SKS Admin paneline erişmek için giriş yapın
+            Öğrenci Kulüpleri Yönetim Paneli'ne erişmek için giriş yapınız.
           </p>
         </div>
 

@@ -44,6 +44,22 @@ export interface EtkinlikBasvuru {
   kulupAdi: string;
   kulupId?: string;
   etkinlikAdi: string;
+  etkinlikTuru?:
+    | 'Sempozyum / Kongre / Zirve'
+    | 'Panel / Seminer / Söyleşi'
+    | 'Sosyal Sorumluluk Projesi'
+    | 'Gezi / Tur / Kamp'
+    | 'Eğitim / Workshop'
+    | 'Sportif Aktivite'
+    | 'Sanatsal Aktivite'
+    | 'Eğlence / Festival / Panayır'
+    | 'Basılı / Dijital Yayın'
+    | 'Yarışma Düzenleme'
+    | 'Yarışma / Etkinlik Katılımı'
+    | 'Stant'
+    | 'Toplantı'
+    | 'Diğer';
+  digerTuruAciklama?: string;
   etkinlikYeri: {
     fakulte: string;
     detay: string;

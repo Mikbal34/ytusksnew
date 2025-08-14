@@ -152,6 +152,32 @@ export function DanismanEkrani() {
     fetchBasvurular();
   }, []);
 
+  const refreshLists = async () => {
+    try {
+      const allBasvurular = await getBasvurular();
+      // Bekleyenler (danışman onayı olmayanlar)
+      const bekleyenBasvurular = allBasvurular.filter(b => b.danismanOnay === undefined || b.danismanOnay === null);
+      setEtkinlikVeBelgelerOnayBekleyenler(bekleyenBasvurular);
+      // İncelenenler (danışman onayı var)
+      const incelenen = allBasvurular.filter(b => b.danismanOnay !== undefined && b.danismanOnay !== null);
+      setTumBasvurular(incelenen);
+      // Ek belgeler istatistikleri
+      const bekleyenEk = allBasvurular.filter(b => b.ekBelgeler && b.ekBelgeler.some(ek => !ek.danismanOnay));
+      setBekleyenEkBelgeSayisi(bekleyenEk.length);
+      const etkinlikOnayliBelgeleriBekleyenListesi: { etkinlikId: string; etkinlikAdi: string; kulupAdi: string; belgeSayisi: number; }[] = [];
+      allBasvurular.forEach(b => {
+        const etkinlikOnayli = b.danismanOnay?.durum === 'Onaylandı';
+        const bekleyenAnaBelgeler = (b.belgeler || []).filter(doc => !doc.danismanOnay);
+        if (etkinlikOnayli && bekleyenAnaBelgeler.length > 0) {
+          etkinlikOnayliBelgeleriBekleyenListesi.push({ etkinlikId: b.id, etkinlikAdi: b.etkinlikAdi, kulupAdi: b.kulupAdi, belgeSayisi: bekleyenAnaBelgeler.length });
+        }
+      });
+      setEtkinligiOnaylanmisBelgeleriBekleyen(etkinlikOnayliBelgeleriBekleyenListesi);
+    } catch (e) {
+      console.error('Listeler yenilenemedi:', e);
+    }
+  };
+
   const filtrelenmisEtkinlikler = tumBasvurular.filter(basvuru =>
     basvuru.etkinlikAdi.toLowerCase().includes(etkinlikAramaMetni.toLowerCase()) ||
     basvuru.kulupAdi.toLowerCase().includes(etkinlikAramaMetni.toLowerCase())
@@ -184,6 +210,8 @@ export function DanismanEkrani() {
       
       try {
         await updateBasvuru(guncelBasvuru);
+        alert('Başvuru danışman tarafından onaylandı.');
+        await refreshLists();
         
         // Email bildirimini gönder
         try {
@@ -196,7 +224,7 @@ export function DanismanEkrani() {
         
         // Kaldırıldı: Onaylanan başvuruyu revize/yeni listelerinden çıkarma
         setSecilenBasvuru(null);
-        setTumBasvurular([...tumBasvurular, guncelBasvuru]);
+        // refreshLists zaten state'leri güncelledi
       } catch (error) {
         console.error('Başvuru onaylama hatası:', error);
         alert('Başvuru onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');

@@ -16,9 +16,17 @@ const FAKULTELER = [
   'Fen-Edebiyat Fakültesi',
   'Mimarlık Fakültesi',
   'İşletme Fakültesi',
+  'Eğitim Fakültesi',
+  'Sanat Tasarım Fakültesi',
+  'Yabancı Diller Yüksekokulu',
+  'Kulüpler Vadisi',
+  'Oditoryum',
   'Tarihi Hamam',
   'Kongre Merkezi',
   'Şevket Erk Konferans Salonu',
+  'Online',
+  'Diğer (Okul İçi)',
+  'Diğer (Okul Dışı)',
   'Diğer'
 ];
 
@@ -31,8 +39,10 @@ const BELGE_TIPLERI: { tip: EtkinlikBelge['tip']; label: string }[] = [
   { tip: 'Diger', label: 'Diğer' }
 ];
 
-interface FormData {
+  interface FormData {
   etkinlikAdi: string;
+    etkinlikTuru: string;
+    digerTuruAciklama?: string;
   fakulte: string;
   adresDetay: string;
   baslangicTarihi: string;
@@ -50,6 +60,7 @@ export function EtkinlikBasvuruFormu() {
   const { user } = useAuth();
   const [formData, setFormData] = useState<FormData>({
     etkinlikAdi: '',
+    etkinlikTuru: '',
     fakulte: '',
     adresDetay: '',
     baslangicTarihi: '',
@@ -73,6 +84,80 @@ export function EtkinlikBasvuruFormu() {
   const belgeInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   // Mevcut belge satırındaki "Belgeyi Değiştir" aksiyonu için ayrı input ve index takibi
   const belgeReplaceInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+
+  // Tarih girişleri için yıl aralığını sınırla
+  const MIN_EVENT_DATE = '2000-01-01T00:00';
+  const MAX_EVENT_DATE = '2100-12-31T23:59';
+
+  // Kullanıcı yazarken yılı 4 karakter ve aralıkta tutmak için normalize edici
+  const normalizeYearInDateTime = (value: string): string => {
+    if (!value) return value;
+    const [datePartRaw, timePartRaw] = value.split('T');
+    const datePart = datePartRaw || '';
+    const dashIndex = datePart.indexOf('-');
+    const rawYear = dashIndex === -1 ? datePart : datePart.slice(0, dashIndex);
+    const restDate = dashIndex === -1 ? '' : datePart.slice(dashIndex); // -MM-DD varsa
+
+    const onlyDigitsYear = (rawYear || '').replace(/\D/g, '').slice(0, 4);
+    if (!onlyDigitsYear) return value;
+
+    let normalizedYear = onlyDigitsYear;
+    if (onlyDigitsYear.length === 4) {
+      const yNum = Math.max(2000, Math.min(2100, parseInt(onlyDigitsYear, 10)));
+      normalizedYear = String(yNum);
+    }
+
+    const normalizedDate = `${normalizedYear}${restDate}`;
+    const normalizedTime = timePartRaw ? timePartRaw.slice(0, 5) : undefined; // HH:MM
+    return normalizedTime ? `${normalizedDate}T${normalizedTime}` : normalizedDate;
+  };
+
+  // ISO/timestamp değerlerini datetime-local input formatına çevir (YYYY-MM-DDTHH:mm)
+  const toInputDateTime = (value?: string): string => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const hh = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
+
+  // Belge adı formatı: Kulup_Etkinlik_BelgeTur+Versiyon_Tarih (ddMMyyyy)
+  const toSlug = (value: string): string => {
+    return (value || '')
+      .toLowerCase()
+      .replace(/ç/g, 'c')
+      .replace(/ğ/g, 'g')
+      .replace(/ı/g, 'i')
+      .replace(/ö/g, 'o')
+      .replace(/ş/g, 's')
+      .replace(/ü/g, 'u')
+      .replace(/[^a-z0-9]+/g, '')
+      .trim();
+  };
+
+  const tipToSlug = (tip: string): string => {
+    switch (tip) {
+      case 'Afiş': return 'afis';
+      case 'KatilimciListesi': return 'katilimci';
+      case 'KumanyaTalep': return 'kumanya';
+      case 'AracIstek': return 'arac';
+      case 'AfisBasim': return 'afisbasim';
+      case 'Diger': return 'diger';
+      default: return toSlug(tip);
+    }
+  };
+
+  const formatTodayDDMMYYYY = (): string => {
+    const d = new Date();
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(d.getFullYear());
+    return `${dd}${mm}${yyyy}`;
+  };
 
   const [mevcutBasvuru, setMevcutBasvuru] = useState<EtkinlikBasvuru | null>(null);
   const isAdvisorApproved = !!mevcutBasvuru?.danismanOnay;
@@ -100,6 +185,8 @@ export function EtkinlikBasvuruFormu() {
             setMevcutBasvuru(basvuru);
             setFormData({
               etkinlikAdi: basvuru.etkinlikAdi,
+              etkinlikTuru: basvuru.etkinlikTuru || '',
+              digerTuruAciklama: basvuru.digerTuruAciklama || '',
               fakulte: basvuru.etkinlikYeri.fakulte,
               adresDetay: basvuru.etkinlikYeri.detay,
               baslangicTarihi: basvuru.baslangicTarihi,
@@ -118,6 +205,9 @@ export function EtkinlikBasvuruFormu() {
             }
             if (basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0) {
               setZamanDilimleri(basvuru.zamanDilimleri);
+            } else if (basvuru.baslangicTarihi && basvuru.bitisTarihi) {
+              // Legacy tekil tarih aralığını bir dilim olarak önceden doldur
+              setZamanDilimleri([{ baslangic: basvuru.baslangicTarihi, bitis: basvuru.bitisTarihi }]);
             }
           }
         } catch (err) {
@@ -313,28 +403,56 @@ export function EtkinlikBasvuruFormu() {
       setLoading(true);
       setError('');
       
-      // Form verilerini doğrula
-      if (!formData.etkinlikAdi || !formData.fakulte || !formData.adresDetay || zamanDilimleri.length === 0) {
-        setError('Lütfen tüm zorunlu alanları doldurun.');
-        setLoading(false);
-        return;
+      // Form verilerini doğrula (yalnız etkinlik revizyonu yapılıyorsa zorunlu)
+      if (etkinlikRevizeModu) {
+        if (!formData.etkinlikAdi || !formData.fakulte || !formData.adresDetay) {
+          setError('Lütfen tüm zorunlu alanları doldurun.');
+          setLoading(false);
+          return;
+        }
+        if (!formData.etkinlikTuru) {
+          setError('Lütfen etkinlik türünü seçiniz.');
+          setLoading(false);
+          return;
+        }
+        if (formData.etkinlikTuru === 'Diğer' && !formData.digerTuruAciklama?.trim()) {
+          setError('Diğer etkinlik türü için açıklama giriniz.');
+          setLoading(false);
+          return;
+        }
       }
       
       // Tekil tarih alanları kaldırıldığı için sadece dilimler doğrulanır
 
-      // Zaman dilimleri kontrolü
-      for (const z of zamanDilimleri) {
-        if (!z.baslangic || !z.bitis) {
-          setError('Tüm zaman dilimlerinde başlangıç ve bitiş girilmelidir.');
-          setLoading(false);
-          return;
-        }
-        const b1 = new Date(z.baslangic);
-        const b2 = new Date(z.bitis);
-        if (b1 >= b2) {
-          setError('Zaman dilimlerinde bitiş, başlangıçtan sonra olmalıdır.');
-          setLoading(false);
-          return;
+      // Zaman dilimleri kontrolü: yalnız kullanıcı dilim girdiyse doğrula
+      if (zamanDilimleri.length > 0) {
+        for (const z of zamanDilimleri) {
+          if (!z.baslangic || !z.bitis) {
+            setError('Tüm zaman dilimlerinde başlangıç ve bitiş girilmelidir.');
+            setLoading(false);
+            return;
+          }
+          const b1 = new Date(z.baslangic);
+          const b2 = new Date(z.bitis);
+
+          // Geçerli tarih aralığı doğrulaması (yıl sınırı + kronolojik sıra)
+          const min = new Date(MIN_EVENT_DATE);
+          const max = new Date(MAX_EVENT_DATE);
+          if (isNaN(b1.getTime()) || isNaN(b2.getTime())) {
+            setError('Geçersiz tarih formatı. Lütfen geçerli bir tarih giriniz.');
+            setLoading(false);
+            return;
+          }
+          if (b1 < min || b1 > max || b2 < min || b2 > max) {
+            setError('Tarih aralığı geçersiz. Yıl 2000 ile 2100 arasında olmalıdır.');
+            setLoading(false);
+            return;
+          }
+          if (b1 >= b2) {
+            setError('Zaman dilimlerinde bitiş, başlangıçtan sonra olmalıdır.');
+            setLoading(false);
+            return;
+          }
         }
       }
       
@@ -357,12 +475,15 @@ export function EtkinlikBasvuruFormu() {
           fakulte: formData.fakulte,
           detay: formData.adresDetay
         },
-        baslangicTarihi: zamanDilimleri[0]?.baslangic || '',
-        bitisTarihi: zamanDilimleri[zamanDilimleri.length - 1]?.bitis || '',
+        etkinlikTuru: formData.etkinlikTuru as any,
+        digerTuruAciklama: formData.etkinlikTuru === 'Diğer' ? (formData.digerTuruAciklama || '') : undefined,
+        baslangicTarihi: (zamanDilimleri[0]?.baslangic) || mevcutBasvuru?.baslangicTarihi || formData.baslangicTarihi,
+        bitisTarihi: (zamanDilimleri[zamanDilimleri.length - 1]?.bitis) || mevcutBasvuru?.bitisTarihi || formData.bitisTarihi,
         zamanDilimleri,
         aciklama: formData.aciklama,
-        durum: 'Beklemede',
-        revizyon: mevcutBasvuru?.revizyon || false,
+         durum: 'Beklemede',
+         // Revize edildiğinde tekrar danışman onayına düşmesi için revizyon bayrağı true
+         revizyon: true,
         sponsorlar: sponsorlar.map(s => ({
           firmaAdi: s.firmaAdi,
           detay: s.detay
@@ -421,12 +542,15 @@ export function EtkinlikBasvuruFormu() {
         if (!items || items.length === 0) continue;
         for (let i = 0; i < items.length; i++) {
           const file = items[i].file as File;
-          const note = (items[i].note || '').trim();
-          const safeNote = note ? `_${note.substring(0, 50).replace(/\s+/g, '_')}` : '';
+          // Not alanı isimlendirmede kullanılmıyor
           try {
             console.log(`${tip} belgesi #${i + 1} yükleniyor...`);
-            const uniqueSuffix = `_${Date.now()}_${i + 1}`;
-            const dosyaAdi = `${formData.etkinlikAdi}_${tip}${safeNote}${uniqueSuffix}`;
+            const kulupSlug = toSlug(kulup.isim);
+            const etkinlikSlug = toSlug(formData.etkinlikAdi);
+            const belgeTur = tipToSlug(tip);
+            const versiyon = `${i + 1}`; // aynı tip için yükleme sırası
+            const tarih = formatTodayDDMMYYYY();
+            const dosyaAdi = `${kulupSlug}_${etkinlikSlug}_${belgeTur}${versiyon}_${tarih}`;
             const dosyaYolu = await etkinlikBelgeYukle({
               dosya: file,
               dosyaAdi,
@@ -575,7 +699,7 @@ export function EtkinlikBasvuruFormu() {
             <>
               <div>
                 <label htmlFor="etkinlikAdi" className="block text-sm font-medium text-gray-700 mb-1">
-                  Etkinlik Adı
+                  Etkinlik Adı <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -588,14 +712,57 @@ export function EtkinlikBasvuruFormu() {
                 />
               </div>
 
-              <div className="space-y-4">
+               <div className="space-y-4">
+                 {/* Etkinlik Türü */}
+                 <div>
+                  <label htmlFor="etkinlikTuru" className="block text-sm font-medium text-gray-700 mb-1">
+                    Etkinlik Türü <span className="text-red-600">*</span>
+                  </label>
+                   <select
+                     id="etkinlikTuru"
+                     value={formData.etkinlikTuru || mevcutBasvuru?.etkinlikTuru || ''}
+                     onChange={(e) => setFormData({ ...formData, etkinlikTuru: e.target.value })}
+                     disabled={isAdvisorApproved && !etkinlikRevizeModu}
+                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                     required
+                   >
+                     <option value="">Seçiniz</option>
+                     <option>Sempozyum / Kongre / Zirve</option>
+                     <option>Panel / Seminer / Söyleşi</option>
+                     <option>Sosyal Sorumluluk Projesi</option>
+                     <option>Gezi / Tur / Kamp</option>
+                     <option>Eğitim / Workshop</option>
+                     <option>Sportif Aktivite</option>
+                     <option>Sanatsal Aktivite</option>
+                     <option>Eğlence / Festival / Panayır</option>
+                     <option>Basılı / Dijital Yayın</option>
+                     <option>Yarışma Düzenleme</option>
+                     <option>Yarışma / Etkinlik Katılımı</option>
+                     <option>Stant</option>
+                     <option>Toplantı</option>
+                     <option>Diğer</option>
+                   </select>
+                   {(formData.etkinlikTuru || mevcutBasvuru?.etkinlikTuru) === 'Diğer' && (
+                     <div className="mt-2">
+                       <label className="block text-xs text-gray-600 mb-1">Diğer Tür Açıklaması <span className="text-red-600">*</span></label>
+                       <input
+                         type="text"
+                         value={formData.digerTuruAciklama ?? mevcutBasvuru?.digerTuruAciklama ?? ''}
+                         onChange={(e) => setFormData({ ...formData, digerTuruAciklama: e.target.value })}
+                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                         placeholder="Etkinlik türünü belirtiniz"
+                         required
+                       />
+                     </div>
+                   )}
+                 </div>
                 <div>
                   <label htmlFor="fakulte" className="block text-sm font-medium text-gray-700 mb-1">
-                    Etkinlik Yeri
+                    Etkinlik Yeri <span className="text-red-600">*</span>
                   </label>
-                  <select
+                   <select
                     id="fakulte"
-                    value={formData.fakulte}
+                     value={formData.fakulte || mevcutBasvuru?.etkinlikYeri.fakulte || ''}
                     onChange={(e) => setFormData({...formData, fakulte: e.target.value})}
                      disabled={isAdvisorApproved && !etkinlikRevizeModu}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -608,19 +775,27 @@ export function EtkinlikBasvuruFormu() {
                   </select>
                   {formData.fakulte && (
                     (() => {
-                      const isSalon = ['Tarihi Hamam', 'Kongre Merkezi', 'Şevket Erk'].some(s => formData.fakulte.includes(s));
+                      const isSalon = ['Tarihi Hamam', 'Kongre Merkezi', 'Şevket Erk', 'Oditoryum'].some(s => formData.fakulte.includes(s));
                       const isFaculty = !isSalon && formData.fakulte.includes('Fakültesi');
+                      const isOkulDisi = formData.fakulte.includes('Okul Dışı');
                       if (isSalon) {
                         return (
                           <div className="mt-2 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                            *İlgili salon için iletişim koordinatörlüğünden randevu alınması zorunludur.
+                            *İletişim Koordinatörlüğü'nden randevu alınması zorunludur.
                           </div>
                         );
                       }
                       if (isFaculty) {
                         return (
                           <div className="mt-2 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-                            *İlgili fakülteden randevu alınması zorunludur.
+                            *İlgili fakülte sekreterliğinden randevu/onay alınması zorunludur.
+                          </div>
+                        );
+                      }
+                      if (isOkulDisi) {
+                        return (
+                          <div className="mt-2 text-[13px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                            * Tüm katılımcılar için feragatname belgesi düzenlenmesi zorunludur.
                           </div>
                         );
                       }
@@ -632,12 +807,12 @@ export function EtkinlikBasvuruFormu() {
                 {formData.fakulte && (
                   <div>
                     <label htmlFor="adresDetay" className="block text-sm font-medium text-gray-700 mb-1">
-                      Adres Detayı
+                      Adres Detayı <span className="text-red-600">*</span>
                     </label>
-                    <input
+                     <input
                       type="text"
                       id="adresDetay"
-                      value={formData.adresDetay}
+                       value={formData.adresDetay || mevcutBasvuru?.etkinlikYeri.detay || ''}
                       onChange={(e) => setFormData({...formData, adresDetay: e.target.value})}
                        disabled={isAdvisorApproved && !etkinlikRevizeModu}
                       placeholder="BZ01"
@@ -654,7 +829,7 @@ export function EtkinlikBasvuruFormu() {
               <div className="mt-4 border rounded-lg p-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-gray-800">Zaman Planı</span>
+                    <span className="text-sm font-medium text-gray-800">Zaman Planı <span className="text-red-600">*</span></span>
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{zamanDilimleri.length} dilim</span>
                     {(formData.baslangicTarihi && formData.bitisTarihi) && (
                       <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Tekil aralık etkin</span>
@@ -679,26 +854,36 @@ export function EtkinlikBasvuruFormu() {
                     </button>
                   </div>
                 </div>
-                {zamanDilimleri.length === 0 && (
-                  <div className="mt-2 text-xs text-gray-500">Örn: İlk gün 15:00-18:00, ikinci gün 08:00-12:00 gibi birden fazla aralığı burada tanımlayın.</div>
-                )}
+                 {zamanDilimleri.length === 0 && (
+                   <div className="mt-2 text-xs text-gray-500">Mevcut tarih aralığı korunur. Yeni dilim eklerseniz, yeni değerler kaydedilir.</div>
+                 )}
                 {zamanDilimleri.map((z, idx) => (
                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end mt-3">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Başlangıç</label>
+                      <label className="block text-xs text-gray-600 mb-1">Başlangıç <span className="text-red-600">*</span></label>
                       <input
                         type="datetime-local"
-                        value={z.baslangic}
-                        onChange={(e) => setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, baslangic: e.target.value } : d))}
+                        value={z.baslangic || toInputDateTime(mevcutBasvuru?.baslangicTarihi)}
+                        onChange={(e) => {
+                          const v = normalizeYearInDateTime(e.target.value);
+                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, baslangic: v } : d));
+                        }}
+                        min={MIN_EVENT_DATE}
+                        max={MAX_EVENT_DATE}
                         className={`w-full px-3 py-2 border rounded ${(!z.baslangic || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Bitiş</label>
+                      <label className="block text-xs text-gray-600 mb-1">Bitiş <span className="text-red-600">*</span></label>
                       <input
                         type="datetime-local"
-                        value={z.bitis}
-                        onChange={(e) => setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, bitis: e.target.value } : d))}
+                        value={z.bitis || toInputDateTime(mevcutBasvuru?.bitisTarihi)}
+                        onChange={(e) => {
+                          const v = normalizeYearInDateTime(e.target.value);
+                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, bitis: v } : d));
+                        }}
+                        min={MIN_EVENT_DATE}
+                        max={MAX_EVENT_DATE}
                         className={`w-full px-3 py-2 border rounded ${(!z.bitis || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
                       />
                     </div>
@@ -710,15 +895,6 @@ export function EtkinlikBasvuruFormu() {
                       >
                         Kaldır
                       </button>
-                      {idx === zamanDilimleri.length - 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setZamanDilimleri(prev => [...prev, { baslangic: '', bitis: '' }])}
-                          className="px-3 py-2 bg-gray-50 text-gray-700 rounded border text-sm"
-                        >
-                          Bir tane daha
-                        </button>
-                      )}
                     </div>
                     {z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis) && (
                       <div className="sm:col-span-3 text-[11px] text-red-600">Bu dilimde bitiş, başlangıçtan sonra olmalıdır.</div>
@@ -864,7 +1040,7 @@ export function EtkinlikBasvuruFormu() {
 
               <div>
               <label htmlFor="aciklama" className="block text-sm font-medium text-gray-700 mb-1">
-                Etkinlik Açıklaması
+                Etkinlik Açıklaması <span className="text-red-600">*</span>
               </label>
               <textarea
                 id="aciklama"

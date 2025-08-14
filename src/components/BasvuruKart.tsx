@@ -107,9 +107,7 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
     ? basvuru.danismanOnay.redSebebi 
     : basvuru.sksOnay?.redSebebi;
 
-  const showRevizeButton = 
-    (basvuru.danismanOnay?.durum === 'Reddedildi' || basvuru.sksOnay?.durum === 'Reddedildi') && 
-    !basvuru.revizyon;
+  // Revize butonu artık her durumda tek bir buton olarak gösterilecek
 
   const canEditBeforeAdvisorApproval = !basvuru.danismanOnay; // Danışman onayı yoksa düzenleme yapılabilir
 
@@ -280,7 +278,9 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
                         const sStat = doc.sksOnay?.durum || 'Bekliyor';
                         const dCls = dStat === 'Onaylandı' ? 'bg-green-100 text-green-800' : dStat === 'Reddedildi' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
                         const sCls = sStat === 'Onaylandı' ? 'bg-green-100 text-green-800' : sStat === 'Reddedildi' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
-                        const timeText = doc.isEk && doc.olusturmaTarihi ? new Date(doc.olusturmaTarihi).toLocaleString('tr-TR') : `Sürüm ${sorted.length - i}`;
+                        const timeText = doc.isEk && doc.olusturmaTarihi
+                          ? new Date(doc.olusturmaTarihi).toLocaleString('tr-TR')
+                          : (doc.dosyaAdi || `Belge ${sorted.length - i}`);
                         return (
                           <div key={i} className="flex flex-wrap items-center gap-2 text-[11px]">
                             <span className="text-gray-600">{timeText}</span>
@@ -316,64 +316,41 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
         </button>
 
         <div className="flex items-center gap-2">
-          {etkinlikOnayliBelgelerOnaysiz && (
-            <div className="relative">
-              <button
-                onClick={() => setRevizeSecimAcik((v) => !v)}
-                className="text-sm px-3 py-1 rounded-md bg-purple-600 text-white hover:bg-purple-700"
-                title="Revize Et"
-              >
-                Revize Et
-              </button>
-              {revizeSecimAcik && (
-                <div className="absolute z-20 mt-2 right-0 bg-white border rounded-md shadow-lg p-3 w-64">
-                  <div className="text-sm font-medium text-gray-700 mb-2">Neyi revize etmek istiyorsunuz?</div>
-                  <div className="space-y-2">
-                    <button
-                      className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
-                      onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=belgeler`)}
-                    >
-                      Sadece Belgeler
-                    </button>
-                    <button
-                      className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
-                      onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=etkinlik`)}
-                    >
-                      Sadece Etkinlik Bilgileri
-                    </button>
-                    <button
-                      className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
-                      onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=ikisi`)}
-                    >
-                      Etkinlik Bilgileri ve Belgeler
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          {canEditBeforeAdvisorApproval && (
+          <div className="relative">
             <button
-              onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}`)}
-              className="text-sm px-3 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700"
+              onClick={() => setRevizeSecimAcik((v) => !v)}
+              className="text-sm px-3 py-1 rounded-md bg-purple-600 text-white hover:bg-purple-700"
+              title="Revize Et"
             >
-              Düzenle
+              Revize Et
             </button>
-          )}
-        {showRevizeButton && (
-          <button
-            onClick={handleRevize}
-            disabled={isRevizing}
-            className={`flex items-center gap-1 text-sm px-3 py-1 rounded-md ${
-              isRevizing 
-                ? 'bg-gray-200 text-gray-500 cursor-not-allowed' 
-                : 'bg-purple-600 text-white hover:bg-purple-700'
-            }`}
-          >
-            <FileEdit className="w-4 h-4" />
-            {isRevizing ? 'İşleniyor...' : 'Revize Et'}
-          </button>
-        )}
+            {revizeSecimAcik && (
+              <div className="absolute z-20 mt-2 right-0 bg-white border rounded-md shadow-lg p-3 w-64">
+                <div className="text-sm font-medium text-gray-700 mb-2">Neyi revize etmek istiyorsunuz?</div>
+                <div className="space-y-2">
+                  <button
+                    className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
+                    onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=belgeler`)}
+                  >
+                    Sadece Belgeler
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
+                    onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=etkinlik`)}
+                  >
+                    Sadece Etkinlik Bilgileri
+                  </button>
+                  <button
+                    className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
+                    onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=ikisi`)}
+                  >
+                    Etkinlik Bilgileri ve Belgeler
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Tek revize butonu kullanıldığı için ayrı "Düzenle" ve ikinci revize butonu kaldırıldı */}
         </div>
       </div>
     </div>

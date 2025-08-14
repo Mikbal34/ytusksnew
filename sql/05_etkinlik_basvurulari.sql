@@ -6,6 +6,8 @@ CREATE TABLE etkinlik_basvurulari (
   etkinlik_yeri_detay VARCHAR NOT NULL,
   baslangic_tarihi TIMESTAMP WITH TIME ZONE NOT NULL,
   bitis_tarihi TIMESTAMP WITH TIME ZONE NOT NULL,
+  etkinlik_turu VARCHAR,
+  diger_turu_aciklama VARCHAR,
   aciklama TEXT,
   durum VARCHAR NOT NULL DEFAULT 'Beklemede',
   revizyon BOOLEAN DEFAULT FALSE,

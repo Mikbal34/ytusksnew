@@ -108,7 +108,7 @@ const SksLoginPage: React.FC = () => {
           </div>
           <h2 className="text-2xl font-bold text-gray-800">SKS Personeli Girişi</h2>
           <p className="mt-2 text-center text-gray-600">
-            YTÜ SKS Personel Paneline erişmek için giriş yapın
+            Öğrenci Kulüpleri Yönetim Paneli'ne erişmek için giriş yapınız.
           </p>
         </div>
 

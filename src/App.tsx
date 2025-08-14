@@ -89,8 +89,7 @@ function HomePage() {
             className="h-24 sm:h-32 mb-6"
           />
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-center text-gray-800">
-            SKS Daire Başkanlığı
-            <span className="block text-xl sm:text-2xl md:text-3xl mt-2 text-gray-600">Kültür Hizmetleri</span>
+            Sağlık Kültür Spor Daire Başkanlığı  Öğrenci Kulüpleri Yönetim Paneli
           </h1>
         </div>
         

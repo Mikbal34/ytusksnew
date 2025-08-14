@@ -386,36 +386,22 @@ export const SKSPaneli: React.FC = () => {
     try {
       console.log('Başvuru onaylanıyor:', basvuru.id);
       
-      // Başvuruya ait belgeler var mı kontrol et
-      if (basvuru.belgeler && basvuru.belgeler.length > 0) {
-        // Herhangi bir belge reddedilmiş mi kontrol et
-        const reddedilenBelge = basvuru.belgeler.find(
-          belge => belge.sksOnay?.durum === 'Reddedildi'
-        );
-        
-        if (reddedilenBelge) {
-          alert('Reddedilmiş belgesi olan bir başvuruyu onaylayamazsınız! Kulüp başkanının reddedilen belgeleri düzeltmesi gerekiyor.');
-          return;
-        }
-      }
-      
-      // Ek belgeler için durum kontrolü (reddedilmiş ek belge varsa engelle)
-      if (basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0) {
-        const reddedilenEkBelge = basvuru.ekBelgeler.find(belge => belge.sksOnay?.durum === 'Reddedildi');
-        if (reddedilenEkBelge) {
-          alert('Reddedilmiş ek belgesi olan bir başvuruyu onaylayamazsınız! Kulüp başkanının reddedilen ek belgeleri düzeltmesi gerekiyor.');
-          return;
-        }
-      }
-      
-      // Belgeler/ek belgeler henüz SKS tarafından onaylanmamışsa ikinci bir onay iste
+      // Belgeler ve ek belgeler için durumlar
+      const hasRejectedMainDocs = !!(basvuru.belgeler && basvuru.belgeler.some(b => b.sksOnay?.durum === 'Reddedildi'));
+      const hasRejectedAdditionalDocs = !!(basvuru.ekBelgeler && basvuru.ekBelgeler.some(b => b.sksOnay?.durum === 'Reddedildi'));
       const hasUnreviewedMainDocs = !!(basvuru.belgeler && basvuru.belgeler.some(b => !b.sksOnay));
       const hasUnreviewedAdditionalDocs = !!(basvuru.ekBelgeler && basvuru.ekBelgeler.some(b => !b.sksOnay));
-      if (hasUnreviewedMainDocs || hasUnreviewedAdditionalDocs) {
-        const confirmed = window.confirm('Belgeleri henüz onaylamadınız, etkinliği yine de onaylıyor musunuz?');
-        if (!confirmed) {
-          return;
-        }
+
+      // Uyarı/Onay akışı: Reddedilmiş veya incelenmemiş belge varsa yine de onaylama imkanı ver
+      if (hasRejectedMainDocs || hasRejectedAdditionalDocs || hasUnreviewedMainDocs || hasUnreviewedAdditionalDocs) {
+        const reasons: string[] = [];
+        if (hasRejectedMainDocs) reasons.push('reddedilmiş ana belge var');
+        if (hasRejectedAdditionalDocs) reasons.push('reddedilmiş ek belge var');
+        if (hasUnreviewedMainDocs) reasons.push('incelenmemiş ana belge var');
+        if (hasUnreviewedAdditionalDocs) reasons.push('incelenmemiş ek belge var');
+        const msg = `Dikkat: Bu başvuru için ${reasons.join(', ')}. Etkinliği yine de onaylıyor musunuz?`;
+        const confirmed = window.confirm(msg);
+        if (!confirmed) return;
       }
       
       // Durum kontrolü - eğer danışman zaten onaylamışsa durum "Onaylandı" olmalı
@@ -649,9 +635,8 @@ export const SKSPaneli: React.FC = () => {
                   const hasAdditionalDocs = basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0;
                   const hasUnreviewedAdditionalDocs = hasAdditionalDocs && basvuru.ekBelgeler && basvuru.ekBelgeler.some(belge => !belge.sksOnay);
                   
-                  // Aktif "Onayla" butonu için tek koşul: reddedilmiş belge olmamalı
-                  // Artık belgeler onaydan bağımsız, yalnızca reddedilmiş belge engeller
-                  const isApproveButtonActive = !hasRejectedDocuments;
+                  // Onay düğmesi her durumda aktif; onay öncesi uyarı/confirm verilecek
+                  const isApproveButtonActive = true;
                   
                   return (
                     <div key={basvuru.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
@@ -690,19 +675,8 @@ export const SKSPaneli: React.FC = () => {
                       <div className="flex items-center gap-4">
                         <button
                           onClick={() => {
-                            if (isApproveButtonActive) {
-                              // Onaylanmamış belge/ek belge varsa kullanıcıdan ikinci onay iste
-                              const hasUnreviewed = (hasUnreviewedDocuments || hasUnreviewedAdditionalDocs);
-                              if (hasUnreviewed) {
-                                const ok = window.confirm('Belgeleri henüz onaylamadınız, etkinliği yine de onaylıyor musunuz?');
-                                if (!ok) return;
-                              }
-                              handleOnay(basvuru);
-                            } else {
-                              if (hasRejectedDocuments) {
-                                alert('Reddedilmiş belgesi olan bir başvuruyu onaylayamazsınız! Kulüp başkanının reddedilen belgeleri düzeltmesi gerekiyor.');
-                              }
-                            }
+                            // Onaylanmamış veya reddedilmiş belge olabilir; handleOnay içinde kapsamlı confirm var
+                            handleOnay(basvuru);
                           }}
                           className={`flex items-center gap-2 ${
                             isApproveButtonActive
