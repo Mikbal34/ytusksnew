@@ -64,26 +64,62 @@ export const AdminPanel: React.FC = () => {
                 Bu işlem etkinlik başvuruları, belgeler, ek belgeler, konuşmacılar, sponsorlar ve onay geçmişi dahil tüm etkinlik verilerini siler. Geri alınamaz.
               </p>
             </div>
-            <button
-              disabled={isClearing}
-              onClick={async () => {
-                if (!window.confirm('Tüm etkinlik verilerini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
-                try {
-                  setIsClearing(true);
-                  await clearStorage();
-                  alert('Etkinlik verileri başarıyla temizlendi.');
-                } catch (e) {
-                  console.error(e);
-                  alert('Veriler temizlenirken bir hata oluştu.');
-                } finally {
-                  setIsClearing(false);
-                }
-              }}
-              className={`px-4 py-2 rounded-md flex items-center gap-2 ${isClearing ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
-            >
-              <Trash2 className="w-4 h-4" />
-              {isClearing ? 'Temizleniyor...' : 'Tüm Etkinlik Verilerini Sil'}
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button
+                onClick={async () => {
+                  try {
+                    await testClearPermissions();
+                    alert('Test tamamlandı. Konsol loglarını kontrol edin.');
+                  } catch (e) {
+                    console.error(e);
+                    alert('Test sırasında hata oluştu.');
+                  }
+                }}
+                className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
+              >
+                🔍 Test
+              </button>
+              <button
+                disabled={isClearing}
+                onClick={async () => {
+                  if (!window.confirm('Tüm etkinlik verilerini silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
+                  try {
+                    setIsClearing(true);
+                    await clearStorage();
+                    alert('Etkinlik verileri başarıyla temizlendi.');
+                  } catch (e) {
+                    console.error(e);
+                    alert('Veriler temizlenirken bir hata oluştu.');
+                  } finally {
+                    setIsClearing(false);
+                  }
+                }}
+                className={`px-4 py-2 rounded-md flex items-center gap-2 ${isClearing ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'}`}
+              >
+                <Trash2 className="w-4 h-4" />
+                {isClearing ? 'Temizleniyor...' : 'Normal Sil'}
+              </button>
+              <button
+                disabled={isClearing}
+                onClick={async () => {
+                  if (!window.confirm('ZORLA SİLME: Bu işlem RLS politikalarını bypass ederek tüm etkinlik verilerini siler. Çok riskli! Emin misiniz?')) return;
+                  if (!window.confirm('Son uyarı: Bu işlem geri alınamaz ve sistem düzeyi izinler kullanır. Devam etmek istediğinize emin misiniz?')) return;
+                  try {
+                    setIsClearing(true);
+                    await forceClearStorage();
+                    alert('Etkinlik verileri zorla temizlendi.');
+                  } catch (e) {
+                    console.error(e);
+                    alert('Zorla silme sırasında hata oluştu.');
+                  } finally {
+                    setIsClearing(false);
+                  }
+                }}
+                className={`px-3 py-2 rounded-md flex items-center gap-2 text-sm ${isClearing ? 'bg-gray-300 text-gray-600 cursor-not-allowed' : 'bg-red-800 text-white hover:bg-red-900'}`}
+              >
+                ⚡ Zorla Sil
+              </button>
+            </div>
           </div>
         </div>
 

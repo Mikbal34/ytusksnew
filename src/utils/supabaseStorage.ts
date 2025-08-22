@@ -689,91 +689,126 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
 
 export const clearStorage = async () => {
   try {
-    console.log('Veritabanı temizleme işlemi başlatılıyor...');
+    console.log('🧹 Veritabanı temizleme işlemi başlatılıyor...');
     
     // Bu işlem için admin yetkisi gerekiyor, bu yüzden doğrudan supabaseAdmin kullanıyoruz
     const client = supabaseAdmin;
     
-    // Tüm başvuruları temizle
-    // Not: Önce ilişkili tabloları temizlememiz gerekiyor
-    
+    // Önce kaç kayıt olduğunu kontrol edelim
+    const { count: basvuruCount } = await client
+      .from('etkinlik_basvurulari')
+      .select('*', { count: 'exact', head: true });
+    console.log(`📊 Toplam ${basvuruCount} başvuru bulundu`);
+
     // 1. Onay geçmişini temizle
-    console.log('Onay geçmişi temizleniyor...');
-    const { error: onayError } = await client
+    console.log('🗑️ Onay geçmişi temizleniyor...');
+    const { data: deletedOnay, error: onayError } = await client
       .from('onay_gecmisi')
       .delete()
-      .neq('id', 0); // Tüm kayıtları sil
+      .not('id', 'is', null)
+      .select();
     
     if (onayError) {
-      console.error('Onay geçmişi temizlenirken hata:', onayError);
+      console.error('❌ Onay geçmişi temizlenirken hata:', onayError);
       throw onayError;
     }
+    console.log(`✅ ${deletedOnay?.length || 0} onay geçmişi silindi`);
     
     // 2. Sponsorları temizle
-    console.log('Sponsorlar temizleniyor...');
-    const { error: sponsorError } = await client
+    console.log('🗑️ Sponsorlar temizleniyor...');
+    const { data: deletedSponsor, error: sponsorError } = await client
       .from('sponsorlar')
       .delete()
-      .neq('id', 0);
+      .not('id', 'is', null)
+      .select();
     
     if (sponsorError) {
-      console.error('Sponsorlar temizlenirken hata:', sponsorError);
+      console.error('❌ Sponsorlar temizlenirken hata:', sponsorError);
       throw sponsorError;
     }
+    console.log(`✅ ${deletedSponsor?.length || 0} sponsor silindi`);
     
     // 3. Konuşmacıları temizle
-    console.log('Konuşmacılar temizleniyor...');
-    const { error: konusmaciError } = await client
+    console.log('🗑️ Konuşmacılar temizleniyor...');
+    const { data: deletedKonusmaci, error: konusmaciError } = await client
       .from('konusmacilar')
       .delete()
-      .neq('id', 0);
+      .not('id', 'is', null)
+      .select();
     
     if (konusmaciError) {
-      console.error('Konuşmacılar temizlenirken hata:', konusmaciError);
+      console.error('❌ Konuşmacılar temizlenirken hata:', konusmaciError);
       throw konusmaciError;
     }
+    console.log(`✅ ${deletedKonusmaci?.length || 0} konuşmacı silindi`);
     
     // 4. Ek belgeleri temizle
-    console.log('Ek belgeler temizleniyor...');
-    const { error: ekBelgeError } = await client
+    console.log('🗑️ Ek belgeler temizleniyor...');
+    const { data: deletedEkBelge, error: ekBelgeError } = await client
       .from('ek_belgeler')
       .delete()
-      .neq('id', 0);
+      .not('id', 'is', null)
+      .select();
     if (ekBelgeError) {
-      console.error('Ek belgeler temizlenirken hata:', ekBelgeError);
+      console.error('❌ Ek belgeler temizlenirken hata:', ekBelgeError);
       throw ekBelgeError;
     }
+    console.log(`✅ ${deletedEkBelge?.length || 0} ek belge silindi`);
 
     // 5. Belgeleri temizle
-    console.log('Belgeler temizleniyor...');
-    const { error: belgeError } = await client
+    console.log('🗑️ Etkinlik belgeleri temizleniyor...');
+    const { data: deletedBelge, error: belgeError } = await client
       .from('etkinlik_belgeleri')
       .delete()
-      .neq('id', 0);
+      .not('id', 'is', null)
+      .select();
     if (belgeError) {
-      console.error('Belgeler temizlenirken hata:', belgeError);
+      console.error('❌ Belgeler temizlenirken hata:', belgeError);
       throw belgeError;
     }
+    console.log(`✅ ${deletedBelge?.length || 0} belge silindi`);
+
+    // 6. Zaman dilimlerini temizle
+    console.log('🗑️ Zaman dilimleri temizleniyor...');
+    const { data: deletedZaman, error: zamanError } = await client
+      .from('etkinlik_zaman_dilimleri')
+      .delete()
+      .not('id', 'is', null)
+      .select();
+    if (zamanError) {
+      console.error('❌ Zaman dilimleri temizlenirken hata:', zamanError);
+      throw zamanError;
+    }
+    console.log(`✅ ${deletedZaman?.length || 0} zaman dilimi silindi`);
     
-    // 6. Son olarak başvuruları temizle
-    console.log('Başvurular temizleniyor...');
-    const { error: basvuruError } = await client
+    // 7. Son olarak başvuruları temizle
+    console.log('🗑️ Başvurular temizleniyor...');
+    const { data: deletedBasvuru, error: basvuruError } = await client
       .from('etkinlik_basvurulari')
       .delete()
-      .neq('id', 0);
+      .not('id', 'is', null)
+      .select();
     
     if (basvuruError) {
-      console.error('Başvurular temizlenirken hata:', basvuruError);
+      console.error('❌ Başvurular temizlenirken hata:', basvuruError);
       throw basvuruError;
     }
+    console.log(`✅ ${deletedBasvuru?.length || 0} başvuru silindi`);
     
-    console.log('Tüm veriler başarıyla temizlendi');
+    // Final kontrol
+    const { count: finalCount } = await client
+      .from('etkinlik_basvurulari')
+      .select('*', { count: 'exact', head: true });
+    console.log(`📊 İşlem sonrası kalan başvuru sayısı: ${finalCount}`);
+    
+    console.log('🎉 Tüm etkinlik verileri başarıyla temizlendi!');
     
   } catch (error) {
-    console.error('Veriler temizlenirken hata oluştu:', error);
+    console.error('💥 Veriler temizlenirken hata oluştu:', error);
     throw error;
   }
 };
+
 
 // Kulüpler için fonksiyonlar
 export const getKulupler = async (): Promise<Kulup[]> => {
