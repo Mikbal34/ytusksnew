@@ -23,8 +23,7 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
         diger_turu_aciklama: basvuru.digerTuruAciklama || null,
         etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
         etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
-        baslangic_tarihi: basvuru.baslangicTarihi,
-        bitis_tarihi: basvuru.bitisTarihi,
+        // Legacy tarih alanları artık kaydedilmeyecek - sadece zaman dilimleri kullanılacak
         aciklama: basvuru.aciklama,
         durum: 'Beklemede',
         revizyon: !!basvuru.revizyon
@@ -164,9 +163,13 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
       // Veritabanı verisini uygulama modeline dönüştür
     const basvurular: EtkinlikBasvuru[] = data.map(basvuru => {
       // Zaman dilimleri
-      const zamanDilimleri = basvuru.etkinlik_zaman_dilimleri
+      const zamanDilimleri = basvuru.etkinlik_zaman_dilimleri && basvuru.etkinlik_zaman_dilimleri.length > 0
         ? basvuru.etkinlik_zaman_dilimleri.map((z: any) => ({ baslangic: z.baslangic, bitis: z.bitis }))
-        : [];
+        : (basvuru.baslangic_tarihi && basvuru.bitis_tarihi) 
+          ? [{ baslangic: basvuru.baslangic_tarihi, bitis: basvuru.bitis_tarihi }]
+          : [];
+      
+
       // Belgeler
       const belgeler = basvuru.etkinlik_belgeleri
         ? basvuru.etkinlik_belgeleri.map((belge: any) => ({
@@ -406,9 +409,13 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
     // Kulüp bilgisi kontrol ediliyor
     const kulupAdi = data.kulupler ? data.kulupler.isim : 'Bilinmeyen Kulüp';
     
-    const zamanDilimleri = data.etkinlik_zaman_dilimleri
+    const zamanDilimleri = data.etkinlik_zaman_dilimleri && data.etkinlik_zaman_dilimleri.length > 0
       ? data.etkinlik_zaman_dilimleri.map((z: any) => ({ baslangic: z.baslangic, bitis: z.bitis }))
-      : [];
+      : (data.baslangic_tarihi && data.bitis_tarihi) 
+        ? [{ baslangic: data.baslangic_tarihi, bitis: data.bitis_tarihi }]
+        : [];
+    
+
 
     return {
       id: data.id,
@@ -421,8 +428,8 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
       },
       etkinlikTuru: data.etkinlik_turu || undefined,
       digerTuruAciklama: data.diger_turu_aciklama || undefined,
-      baslangicTarihi: data.baslangic_tarihi,
-      bitisTarihi: data.bitis_tarihi,
+      baslangicTarihi: zamanDilimleri.length > 0 ? zamanDilimleri[0].baslangic : data.baslangic_tarihi,
+      bitisTarihi: zamanDilimleri.length > 0 ? zamanDilimleri[zamanDilimleri.length - 1].bitis : data.bitis_tarihi,
       zamanDilimleri,
       aciklama: data.aciklama,
       durum: data.durum,
@@ -492,8 +499,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
         diger_turu_aciklama: basvuru.digerTuruAciklama || null,
         etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
         etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
-        baslangic_tarihi: basvuru.baslangicTarihi,
-        bitis_tarihi: basvuru.bitisTarihi,
+        // Legacy tarih alanları artık güncellenmeyecek - sadece zaman dilimleri kullanılacak
         aciklama: basvuru.aciklama,
         durum: basvuru.durum,
         revizyon: basvuru.revizyon,

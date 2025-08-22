@@ -45,8 +45,6 @@ const BELGE_TIPLERI: { tip: EtkinlikBelge['tip']; label: string }[] = [
     digerTuruAciklama?: string;
   fakulte: string;
   adresDetay: string;
-  baslangicTarihi: string;
-  bitisTarihi: string;
   aciklama: string;
 }
 
@@ -63,8 +61,6 @@ export function EtkinlikBasvuruFormu() {
     etkinlikTuru: '',
     fakulte: '',
     adresDetay: '',
-    baslangicTarihi: '',
-    bitisTarihi: '',
     aciklama: ''
   });
   const [zamanDilimleri, setZamanDilimleri] = useState<Array<{ baslangic: string; bitis: string }>>([]);
@@ -189,8 +185,6 @@ export function EtkinlikBasvuruFormu() {
               digerTuruAciklama: basvuru.digerTuruAciklama || '',
               fakulte: basvuru.etkinlikYeri.fakulte,
               adresDetay: basvuru.etkinlikYeri.detay,
-              baslangicTarihi: basvuru.baslangicTarihi,
-              bitisTarihi: basvuru.bitisTarihi,
               aciklama: basvuru.aciklama
             });
             if (basvuru.sponsorlar?.length) {
@@ -205,9 +199,15 @@ export function EtkinlikBasvuruFormu() {
             }
             if (basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0) {
               setZamanDilimleri(basvuru.zamanDilimleri);
-            } else if (basvuru.baslangicTarihi && basvuru.bitisTarihi) {
-              // Legacy tekil tarih aralığını bir dilim olarak önceden doldur
-              setZamanDilimleri([{ baslangic: basvuru.baslangicTarihi, bitis: basvuru.bitisTarihi }]);
+            } else {
+              if (basvuru.baslangicTarihi && basvuru.bitisTarihi) {
+                setZamanDilimleri([{ 
+                  baslangic: basvuru.baslangicTarihi, 
+                  bitis: basvuru.bitisTarihi 
+                }]);
+              } else {
+                setZamanDilimleri([]);
+              }
             }
           }
         } catch (err) {
@@ -422,9 +422,13 @@ export function EtkinlikBasvuruFormu() {
         }
       }
       
-      // Tekil tarih alanları kaldırıldığı için sadece dilimler doğrulanır
-
-      // Zaman dilimleri kontrolü: yalnız kullanıcı dilim girdiyse doğrula
+      // Zaman dilimleri kontrolü: artık zorunlu
+      if (zamanDilimleri.length === 0) {
+        setError('En az bir zaman dilimi eklemeniz gerekiyor.');
+        setLoading(false);
+        return;
+      }
+      
       if (zamanDilimleri.length > 0) {
         for (const z of zamanDilimleri) {
           if (!z.baslangic || !z.bitis) {
@@ -477,8 +481,8 @@ export function EtkinlikBasvuruFormu() {
         },
         etkinlikTuru: formData.etkinlikTuru as any,
         digerTuruAciklama: formData.etkinlikTuru === 'Diğer' ? (formData.digerTuruAciklama || '') : undefined,
-        baslangicTarihi: (zamanDilimleri[0]?.baslangic) || mevcutBasvuru?.baslangicTarihi || formData.baslangicTarihi,
-        bitisTarihi: (zamanDilimleri[zamanDilimleri.length - 1]?.bitis) || mevcutBasvuru?.bitisTarihi || formData.bitisTarihi,
+        baslangicTarihi: zamanDilimleri[0]?.baslangic || '',
+        bitisTarihi: zamanDilimleri[zamanDilimleri.length - 1]?.bitis || '',
         zamanDilimleri,
         aciklama: formData.aciklama,
          durum: 'Beklemede',
@@ -831,20 +835,8 @@ export function EtkinlikBasvuruFormu() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-gray-800">Zaman Planı <span className="text-red-600">*</span></span>
                     <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{zamanDilimleri.length} dilim</span>
-                    {(formData.baslangicTarihi && formData.bitisTarihi) && (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">Tekil aralık etkin</span>
-                    )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {(formData.baslangicTarihi && formData.bitisTarihi) && (
-                      <button
-                        type="button"
-                        onClick={() => setZamanDilimleri(prev => [...prev, { baslangic: formData.baslangicTarihi, bitis: formData.bitisTarihi }])}
-                        className="text-blue-600 hover:text-blue-700 text-sm"
-                      >
-                        Tekil aralığı dilimlere ekle
-                      </button>
-                    )}
                     <button
                       type="button"
                       onClick={() => setZamanDilimleri(prev => [...prev, { baslangic: '', bitis: '' }])}
@@ -855,18 +847,21 @@ export function EtkinlikBasvuruFormu() {
                   </div>
                 </div>
                  {zamanDilimleri.length === 0 && (
-                   <div className="mt-2 text-xs text-gray-500">Mevcut tarih aralığı korunur. Yeni dilim eklerseniz, yeni değerler kaydedilir.</div>
+                   <div className="mt-2 text-xs text-gray-500">En az bir zaman dilimi eklemeniz gerekiyor.</div>
                  )}
+                 
                 {zamanDilimleri.map((z, idx) => (
                   <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end mt-3">
                     <div>
                       <label className="block text-xs text-gray-600 mb-1">Başlangıç <span className="text-red-600">*</span></label>
                       <input
                         type="datetime-local"
-                        value={z.baslangic || toInputDateTime(mevcutBasvuru?.baslangicTarihi)}
+                        value={toInputDateTime(z.baslangic) || ''}
                         onChange={(e) => {
-                          const v = normalizeYearInDateTime(e.target.value);
-                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, baslangic: v } : d));
+                          const v = e.target.value;
+                          // ISO timestamp formatına çevir
+                          const isoV = v ? new Date(v).toISOString() : '';
+                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, baslangic: isoV } : d));
                         }}
                         min={MIN_EVENT_DATE}
                         max={MAX_EVENT_DATE}
@@ -877,10 +872,12 @@ export function EtkinlikBasvuruFormu() {
                       <label className="block text-xs text-gray-600 mb-1">Bitiş <span className="text-red-600">*</span></label>
                       <input
                         type="datetime-local"
-                        value={z.bitis || toInputDateTime(mevcutBasvuru?.bitisTarihi)}
+                        value={toInputDateTime(z.bitis) || ''}
                         onChange={(e) => {
-                          const v = normalizeYearInDateTime(e.target.value);
-                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, bitis: v } : d));
+                          const v = e.target.value;
+                          // ISO timestamp formatına çevir
+                          const isoV = v ? new Date(v).toISOString() : '';
+                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, bitis: isoV } : d));
                         }}
                         min={MIN_EVENT_DATE}
                         max={MAX_EVENT_DATE}
