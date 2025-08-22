@@ -377,12 +377,10 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
         sponsorlar (*),
         konusmacilar (*),
         etkinlik_belgeleri (*),
-        onay_gecmisi!inner(onay_kategorisi, onay_tipi, durum, tarih, red_sebebi),
         ek_belgeler (*),
         etkinlik_zaman_dilimleri (*)
       `)
       .eq('id', id)
-      .eq('onay_gecmisi.onay_kategorisi', 'Etkinlik')
       .single();
     
     if (error) {
@@ -392,7 +390,16 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
 
     console.log('Başvuru başarıyla getirildi.');
     
-    // Onay geçmişi tipini düzelt
+    // Onay geçmişini ayrı sorgu ile al (unified sistem)
+    const { data: onayGecmisiData } = await client
+      .from('onay_gecmisi')
+      .select('onay_tipi, durum, tarih, red_sebebi')
+      .eq('basvuru_id', id)
+      .eq('onay_kategorisi', 'Etkinlik');
+
+    console.log('Onay geçmişi alındı:', onayGecmisiData?.length || 0, 'kayıt');
+    
+    // Onay geçmişini işle
     type OnayGecmisiItem = {
       onay_tipi: string;
       durum: 'Onaylandı' | 'Reddedildi';
@@ -400,8 +407,8 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
       red_sebebi?: string;
     };
 
-    const danismanOnaylari = data.onay_gecmisi
-      ? data.onay_gecmisi
+    const danismanOnaylari = onayGecmisiData
+      ? onayGecmisiData
           .filter((onay: OnayGecmisiItem) => onay.onay_tipi === 'Danışman')
           .map((onay: OnayGecmisiItem) => ({
             durum: onay.durum,
@@ -410,8 +417,8 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
           }))
       : [];
       
-    const sksOnaylari = data.onay_gecmisi
-      ? data.onay_gecmisi
+    const sksOnaylari = onayGecmisiData
+      ? onayGecmisiData
           .filter((onay: OnayGecmisiItem) => onay.onay_tipi === 'SKS')
           .map((onay: OnayGecmisiItem) => ({
             durum: onay.durum,
