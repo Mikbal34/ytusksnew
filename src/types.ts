@@ -24,6 +24,7 @@ export interface EtkinlikBelge {
   dosyaAdi: string;
   danismanOnay?: OnayDurumu;
   sksOnay?: OnayDurumu;
+  durum: 'Beklemede' | 'Onaylandı' | 'Reddedildi';
 }
 
 export interface EkBelge {
@@ -64,9 +65,9 @@ export interface EtkinlikBasvuru {
     fakulte: string;
     detay: string;
   };
-  baslangicTarihi: string; // legacy alan
-  bitisTarihi: string;     // legacy alan
-  zamanDilimleri?: Array<{ baslangic: string; bitis: string }>; // çoklu
+  baslangicTarihi?: string; // legacy alan - opsiyonel
+  bitisTarihi?: string;     // legacy alan - opsiyonel  
+  zamanDilimleri?: Array<{ baslangic: string; bitis: string }>; // çoklu - yeni sistem
   sponsorlar?: Sponsor[];
   konusmacilar?: Konusmaci[];
   aciklama: string;

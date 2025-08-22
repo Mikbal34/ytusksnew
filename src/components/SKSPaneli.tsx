@@ -651,8 +651,20 @@ export const SKSPaneli: React.FC = () => {
                         </div>
                         <p className="text-sm text-gray-600 mt-1">{basvuru.kulupAdi}</p>
                         <div className="text-sm text-gray-600 mt-1">
-                          <div>Başlangıç: {new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR')}</div>
-                          <div>Bitiş: {new Date(basvuru.bitisTarihi).toLocaleString('tr-TR')}</div>
+                          {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 ? (
+                            basvuru.zamanDilimleri.map((zaman, index) => (
+                              <div key={index}>
+                                <div>Başlangıç: {new Date(zaman.baslangic).toLocaleString('tr-TR')}</div>
+                                <div>Bitiş: {new Date(zaman.bitis).toLocaleString('tr-TR')}</div>
+                                {basvuru.zamanDilimleri!.length > 1 && index < basvuru.zamanDilimleri!.length - 1 && <hr className="my-1" />}
+                              </div>
+                            ))
+                          ) : (
+                            <div>
+                              <div>Başlangıç: {basvuru.baslangicTarihi ? new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
+                              <div>Bitiş: {basvuru.bitisTarihi ? new Date(basvuru.bitisTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
+                            </div>
+                          )}
                         </div>
                         
                         {/* Eğer reddedilmiş veya onaylanmamış belge varsa uyarı göster */}

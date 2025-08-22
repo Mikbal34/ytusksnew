@@ -126,7 +126,14 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
       <div className="text-sm text-gray-600 mb-3">
         <div className="flex items-center gap-1">
           <CalendarClock className="w-4 h-4" />
-          <span>{new Date(basvuru.baslangicTarihi).toLocaleDateString('tr-TR')}</span>
+          <span>
+            {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 
+              ? new Date(basvuru.zamanDilimleri[0].baslangic).toLocaleDateString('tr-TR')
+              : basvuru.baslangicTarihi 
+                ? new Date(basvuru.baslangicTarihi).toLocaleDateString('tr-TR')
+                : 'Tarih belirtilmemiş'
+            }
+          </span>
         </div>
       </div>
 

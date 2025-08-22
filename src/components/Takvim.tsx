@@ -33,11 +33,20 @@ export function Takvim({ onaylananEtkinlikler }: TakvimProps) {
   const getEtkinliklerForDate = (date: Date) => {
     return onaylananEtkinlikler.filter(etkinlik => {
       try {
+        // Önce zaman dilimlerini kontrol et
+        if (etkinlik.zamanDilimleri && etkinlik.zamanDilimleri.length > 0) {
+          return etkinlik.zamanDilimleri.some(zaman => {
+            if (!zaman.baslangic) return false;
+            const etkinlikTarihi = parseISO(zaman.baslangic);
+            return isSameDay(etkinlikTarihi, date);
+          });
+        }
+        // Fallback olarak eski tarih alanlarını kullan
         if (!etkinlik.baslangicTarihi) return false;
         const etkinlikTarihi = parseISO(etkinlik.baslangicTarihi);
         return isSameDay(etkinlikTarihi, date);
       } catch (error) {
-        console.error('Invalid date format:', etkinlik.baslangicTarihi);
+        console.error('Invalid date format:', etkinlik.zamanDilimleri || etkinlik.baslangicTarihi);
         return false;
       }
     });
@@ -201,7 +210,17 @@ export function Takvim({ onaylananEtkinlikler }: TakvimProps) {
                     <div>
                       <span className="font-medium text-gray-600">Tarih: </span>
                       <span className="text-gray-800">
-                        {format(parseISO(etkinlik.baslangicTarihi), 'dd.MM.yyyy HH:mm', { locale: tr })}
+                        {etkinlik.zamanDilimleri && etkinlik.zamanDilimleri.length > 0 
+                          ? etkinlik.zamanDilimleri.map((zaman, index) => (
+                              <div key={index}>
+                                {format(parseISO(zaman.baslangic), 'dd.MM.yyyy HH:mm', { locale: tr })}
+                                {zaman.bitis && ` - ${format(parseISO(zaman.bitis), 'HH:mm', { locale: tr })}`}
+                              </div>
+                            ))
+                          : etkinlik.baslangicTarihi 
+                            ? format(parseISO(etkinlik.baslangicTarihi), 'dd.MM.yyyy HH:mm', { locale: tr })
+                            : 'Tarih belirtilmemiş'
+                        }
                       </span>
                     </div>
                     {etkinlik.etkinlikYeri && (
