@@ -96,27 +96,48 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
       }
     }
     
-    // Belgeler varsa ekle (sadece string dosya URL'leri olan belgeleri)
+    // Belgeler varsa ekle
     if (basvuru.belgeler && basvuru.belgeler.length > 0) {
-      // File nesnesi olan belgeleri atla, sadece string dosya yolları olanları kaydet
-      const stringBelgeler = basvuru.belgeler.filter(belge => typeof belge.dosya === 'string');
+      console.log('🔄 Belgeler kaydediliyor:', basvuru.belgeler.length, 'adet');
       
-      if (stringBelgeler.length > 0) {
-        const belgeVerileri = stringBelgeler.map(belge => ({
+      // Hem string hem File nesnelerini işle
+      const belgeVerileri = [];
+      
+      for (const belge of basvuru.belgeler) {
+        let dosyaYolu: string;
+        
+        if (typeof belge.dosya === 'string') {
+          // Zaten string ise direkt kullan
+          dosyaYolu = belge.dosya;
+        } else {
+          // File nesnesiyse önce yükle
+          console.log('📁 File nesnesi bulundu, yükleniyor:', belge.dosyaAdi);
+          // Bu durumda File nesnesi varsa şimdilik atla - belge yükleme ayrı süreçte olacak
+          continue;
+        }
+        
+        belgeVerileri.push({
           basvuru_id: basvuruId,
           tip: belge.tip,
           dosya_adi: belge.dosyaAdi,
-          dosya_yolu: belge.dosya
-        }));
+          dosya_yolu: dosyaYolu,
+          durum: belge.durum || 'Beklemede' // YENİ: Durum alanını da ekle
+        });
+      }
+      
+      if (belgeVerileri.length > 0) {
+        console.log('💾 Kaydedilecek belge verisi:', belgeVerileri);
         
         const { error: belgeError } = await adminClient
           .from('etkinlik_belgeleri')
           .insert(belgeVerileri);
         
         if (belgeError) {
-          console.error('Belgeler eklenirken hata:', belgeError);
+          console.error('❌ Belgeler eklenirken hata:', belgeError);
           throw new Error(`Belgeler eklenemedi: ${belgeError.message}`);
         }
+        
+        console.log('✅ Belgeler başarıyla kaydedildi');
       }
     }
     
@@ -1899,6 +1920,8 @@ const updateBesvuruBelgeleri = async (
   client: any
 ): Promise<void> => {
   if (belgeler && belgeler.length > 0) {
+    console.log('🔄 Belgeler güncelleniyor:', belgeler.length, 'adet');
+    
     // Önce eski belgeleri sil
     const { error: silmeError } = await client
       .from('etkinlik_belgeleri')
@@ -1906,32 +1929,41 @@ const updateBesvuruBelgeleri = async (
       .eq('basvuru_id', basvuruId);
     
     if (silmeError) {
-      console.error('Eski belgeler silinirken hata:', silmeError);
+      console.error('❌ Eski belgeler silinirken hata:', silmeError);
       throw silmeError;
     }
     
-    // File nesnesi olan belgeleri atla, sadece string dosya yolları olanları kaydet
-    const stringBelgeler = belgeler.filter(belge => typeof belge.dosya === 'string');
+    // Belgeleri hazırla (unified sistem ile uyumlu)
+    const belgeVerileri = [];
     
-    if (stringBelgeler.length > 0) {
-      // Yeni belgeleri ekle
-      const belgeVerileri = stringBelgeler.map(belge => ({
-        basvuru_id: basvuruId,
-        tip: belge.tip,
-        dosya_adi: belge.dosyaAdi,
-        dosya_yolu: belge.dosya,
-        danisman_onay: belge.danismanOnay,
-        sks_onay: belge.sksOnay
-      }));
+    for (const belge of belgeler) {
+      if (typeof belge.dosya === 'string') {
+        belgeVerileri.push({
+          basvuru_id: basvuruId,
+          tip: belge.tip,
+          dosya_adi: belge.dosyaAdi,
+          dosya_yolu: belge.dosya,
+          durum: belge.durum || 'Beklemede' // YENİ: Unified sistem uyumlu durum
+        });
+      } else {
+        // File nesnesi varsa şimdilik atla - ayrı yükleme süreciyle halledilecek
+        console.log('📁 File nesnesi atlandı:', belge.dosyaAdi);
+      }
+    }
+    
+    if (belgeVerileri.length > 0) {
+      console.log('💾 Kaydedilecek belge verisi:', belgeVerileri);
       
       const { error: belgeError } = await client
         .from('etkinlik_belgeleri')
         .insert(belgeVerileri);
       
       if (belgeError) {
-        console.error('Yeni belgeler eklenirken hata:', belgeError);
+        console.error('❌ Yeni belgeler eklenirken hata:', belgeError);
         throw belgeError;
       }
+      
+      console.log('✅ Belgeler başarıyla güncellendi');
     }
   }
 };

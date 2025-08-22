@@ -565,7 +565,8 @@ export function EtkinlikBasvuruFormu() {
               yuklenenBelgePaths.push({
                 tip: tip as EtkinlikBelge['tip'],
                 dosyaAdi,
-                dosya: dosyaYolu
+                dosya: dosyaYolu,
+                durum: 'Beklemede' // YENİ: Unified sistem için durum
               });
               console.log(`${tip} belgesi yüklendi:`, dosyaYolu);
             } else {
@@ -595,7 +596,15 @@ export function EtkinlikBasvuruFormu() {
             } as EtkinlikBasvuru;
             await updateBasvuru(birlesik);
           } else {
-            // Yeni başvuru durumunda belgeler kaydedilmiş olmalı
+            // Yeni başvuru durumunda da yüklenen belgeleri database'e kaydet
+            console.log('🔄 Yeni başvuruya belgeler ekleniyor:', yuklenenBelgePaths.length, 'adet');
+            const belgeliBasvuru = {
+              ...yeniBasvuru,
+              id: basvuruId,
+              belgeler: yuklenenBelgePaths,
+            } as EtkinlikBasvuru;
+            await updateBasvuru(belgeliBasvuru);
+            console.log('✅ Belgeler başarıyla eklendi');
           }
         } catch (err) {
           console.error('Belgeler başvuruya eklenirken hata:', err);
