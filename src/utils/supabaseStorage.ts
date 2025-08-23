@@ -13,7 +13,7 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
     const client = supabaseAdmin;
     console.log('updateBasvuru: admin client ile yazma işlemi');
     
-    // Ana başvuru bilgilerini ekle
+    // Ana başvuru bilgilerini ekle - JSONB onay sistemi
     const { data: basvuruData, error: basvuruError } = await client
       .from('etkinlik_basvurulari')
       .insert({
@@ -25,7 +25,7 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
         etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
         // Legacy tarih alanları artık kaydedilmeyecek - sadece zaman dilimleri kullanılacak
         aciklama: basvuru.aciklama,
-        durum: 'Beklemede',
+        // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
         revizyon: !!basvuru.revizyon
       })
       .select()
@@ -120,8 +120,8 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
           basvuru_id: basvuruId,
           tip: belge.tip,
           dosya_adi: belge.dosyaAdi,
-          dosya_yolu: dosyaYolu,
-          durum: belge.durum || 'Beklemede' // YENİ: Durum alanını da ekle
+          dosya_yolu: dosyaYolu
+          // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
         });
       }
       
@@ -191,19 +191,21 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
           : [];
       
 
-      // Belgeler
+      // Belgeler - unified sistem ile uyumlu
+      // Belgeler - JSONB onay sistemi
       const belgeler = basvuru.etkinlik_belgeleri
         ? basvuru.etkinlik_belgeleri.map((belge: any) => ({
             id: belge.id,
             tip: belge.tip,
             dosya: belge.dosya_yolu,
             dosyaAdi: belge.dosya_adi,
+            // JSONB onay bilgileri direkt olarak
             danismanOnay: belge.danisman_onay,
             sksOnay: belge.sks_onay
           }))
         : [];
       
-      // Ek Belgeler
+      // Ek Belgeler - JSONB onay sistemi
       const ekBelgeler = basvuru.ek_belgeler
         ? basvuru.ek_belgeler.map((belge: any) => ({
             id: belge.id,
@@ -213,9 +215,9 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
             dosyaAdi: belge.dosya_adi,
             olusturmaTarihi: belge.olusturma_tarihi,
             aciklama: belge.aciklama,
+            // JSONB onay bilgileri direkt olarak
             danismanOnay: belge.danisman_onay,
-            sksOnay: belge.sks_onay,
-            durum: belge.durum
+            sksOnay: belge.sks_onay
           }))
         : [];
       
@@ -243,58 +245,9 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
           }))
         : [];
       
-      // Onay geçmişi
-      const onayGecmisi = {
-        danismanOnaylari: [] as Array<{
-          id: string;
-          durum: 'Onaylandı' | 'Reddedildi';
-          tarih: string;
-          redSebebi?: string;
-        }>,
-        sksOnaylari: [] as Array<{
-          id: string;
-          durum: 'Onaylandı' | 'Reddedildi';
-          tarih: string;
-          redSebebi?: string;
-        }>
-      };
-      
-      // Onay geçmişi varsa
-      if (basvuru.onay_gecmisi && basvuru.onay_gecmisi.length > 0) {
-        // Danışman onayları
-        const danismanOnaylari = basvuru.onay_gecmisi
-          .filter((onay: any) => onay.onay_tipi === 'Danışman')
-          .map((onay: any) => ({
-            id: onay.id,
-            durum: onay.durum,
-            tarih: onay.tarih,
-            redSebebi: onay.red_sebebi
-          }))
-          .sort((a: any, b: any) => new Date(b.tarih).getTime() - new Date(a.tarih).getTime());
-        
-        onayGecmisi.danismanOnaylari = danismanOnaylari;
-          
-        // SKS onayları
-        const sksOnaylari = basvuru.onay_gecmisi
-          .filter((onay: any) => onay.onay_tipi === 'SKS')
-          .map((onay: any) => ({
-            id: onay.id,
-            durum: onay.durum,
-            tarih: onay.tarih,
-            redSebebi: onay.red_sebebi
-          }))
-          .sort((a: any, b: any) => new Date(b.tarih).getTime() - new Date(a.tarih).getTime());
-          
-        onayGecmisi.sksOnaylari = sksOnaylari;
-      }
-      
-      const sonDanismanOnayi = onayGecmisi.danismanOnaylari.length > 0 
-        ? onayGecmisi.danismanOnaylari[0] 
-        : undefined;
-        
-      const sonSksOnayi = onayGecmisi.sksOnaylari.length > 0 
-        ? onayGecmisi.sksOnaylari[0] 
-        : undefined;
+      // JSONB Onay Sistemi - direkt JSONB kolonlarından al
+      const danismanOnay = basvuru.danisman_onay;
+      const sksOnay = basvuru.sks_onay;
       
       // Kulüp bilgisi kontrol ediliyor
       const kulupAdi = basvuru.kulupler ? basvuru.kulupler.isim : 'Bilinmeyen Kulüp';
@@ -304,8 +257,8 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
         console.log(
           `Revize başvuru işleniyor - ID: ${basvuru.id}, ` +
           `Orijinal ID: ${basvuru.orijinal_basvuru_id}, ` +
-          `Danışman onayı: ${sonDanismanOnayi ? sonDanismanOnayi.durum : 'YOK'}, ` +
-          `Son onay tarihi: ${sonDanismanOnayi ? sonDanismanOnayi.tarih : 'YOK'}`
+          `Danışman onayı: ${danismanOnay ? danismanOnay.durum : 'YOK'}, ` +
+          `Son onay tarihi: ${danismanOnay ? danismanOnay.tarih : 'YOK'}`
         );
       }
       
@@ -333,11 +286,10 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
         konusmacilar: konusmacilar,
         belgeler: belgeler,
         ekBelgeler: ekBelgeler,
-        durum: basvuru.durum,
+
         revizyon: basvuru.revizyon,
-        danismanOnay: sonDanismanOnayi,
-        sksOnay: sonSksOnayi,
-        onayGecmisi: onayGecmisi,
+        danismanOnay: danismanOnay,
+        sksOnay: sksOnay,
         orijinalBasvuruId: basvuru.orijinal_basvuru_id
       };
     });
@@ -489,10 +441,10 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
           const sksOnay = belgeOnaylari?.find(o => o.onay_tipi === 'SKS');
 
           return {
-            id: belge.id,
-            tip: belge.tip,
-            dosya: belge.dosya_yolu,
-            dosyaAdi: belge.dosya_adi,
+        id: belge.id,
+        tip: belge.tip,
+        dosya: belge.dosya_yolu,
+        dosyaAdi: belge.dosya_adi,
             danismanOnay: danismanOnay ? {
               durum: danismanOnay.durum,
               tarih: danismanOnay.tarih,
@@ -503,7 +455,7 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
               tarih: sksOnay.tarih,
               redSebebi: sksOnay.red_sebebi
             } : undefined,
-            durum: belge.durum || 'Beklemede'
+            // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
           };
         })
       ) : [],
@@ -521,13 +473,13 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
           const sksOnay = belgeOnaylari?.find(o => o.onay_tipi === 'SKS');
 
           return {
-            id: belge.id,
-            etkinlikId: belge.etkinlik_id,
-            tip: belge.tip,
-            dosya: belge.dosya_yolu,
-            dosyaAdi: belge.dosya_adi,
-            olusturmaTarihi: belge.olusturma_tarihi,
-            aciklama: belge.aciklama,
+        id: belge.id,
+        etkinlikId: belge.etkinlik_id,
+        tip: belge.tip,
+        dosya: belge.dosya_yolu,
+        dosyaAdi: belge.dosya_adi,
+        olusturmaTarihi: belge.olusturma_tarihi,
+        aciklama: belge.aciklama,
             danismanOnay: danismanOnay ? {
               durum: danismanOnay.durum,
               tarih: danismanOnay.tarih,
@@ -537,8 +489,8 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
               durum: sksOnay.durum,
               tarih: sksOnay.tarih,
               redSebebi: sksOnay.red_sebebi
-            } : undefined,
-            durum: belge.durum
+            } : undefined
+        // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
           };
         })
       ) : [],
@@ -577,7 +529,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
         etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
         // Legacy tarih alanları artık güncellenmeyecek - sadece zaman dilimleri kullanılacak
         aciklama: basvuru.aciklama,
-        durum: basvuru.durum,
+
         revizyon: basvuru.revizyon
         // JSONB onay alanları kaldırıldı - artık sadece onay_gecmisi kullanılıyor
       })
@@ -612,91 +564,86 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
         }
       }
     }
+    // JSONB Onay Sistemi - etkinlik onayları
     if (basvuru.danismanOnay || basvuru.sksOnay) {
-      // Mevcut etkinlik onay geçmişini al - unified sistem
-      const { data: gecmisData, error: gecmisError } = await client
-        .from('onay_gecmisi')
-        .select('*')
-        .eq('basvuru_id', basvuru.id)
-        .eq('onay_kategorisi', 'Etkinlik');
+      console.log('🔄 JSONB Etkinlik onayları güncelleniyor...');
       
-      if (gecmisError) {
-        console.error('Onay geçmişi alınırken hata:', gecmisError);
-        throw gecmisError;
-      }
+      // Kullanıcı ID'sini al
+      const { data: userData } = await supabase.auth.getUser();
+      const onaylayanId = userData?.user?.id;
       
-      console.log('Mevcut onay geçmişi:', gecmisData);
+      // Güncelleme verisi hazırla
+      let updateData: any = {};
       
-      // Yeni onaylar ekle
       if (basvuru.danismanOnay) {
-        // Aynı danışman onayı daha önce eklenmiş mi kontrol et
-        const existingApproval = gecmisData?.find(
-          (onay: any) => onay.onay_tipi === 'Danışman' && 
-                  onay.durum === basvuru.danismanOnay?.durum && 
-                  (!onay.red_sebebi || onay.red_sebebi === basvuru.danismanOnay?.redSebebi)
-        );
+        updateData.danisman_onay = {
+          durum: basvuru.danismanOnay.durum,
+          tarih: basvuru.danismanOnay.tarih || new Date().toISOString(),
+          redSebebi: basvuru.danismanOnay.redSebebi,
+          onaylayanId: onaylayanId
+        };
         
-        // Eğer aynı onay kaydı yoksa, yeni bir kayıt ekle
-        if (!existingApproval) {
-          // Kullanıcı ID'sini al
-          const { data: userData } = await supabase.auth.getUser();
-          const onaylayanId = userData?.user?.id;
-          
+        // Audit trail için onay_gecmisi tablosuna da kaydet
           const { error: onayError } = await client
             .from('onay_gecmisi')
             .insert({
               basvuru_id: basvuru.id,
-              onay_kategorisi: 'Etkinlik',
+            onay_kategorisi: 'Etkinlik',
               onay_tipi: 'Danışman',
               durum: basvuru.danismanOnay.durum,
               tarih: basvuru.danismanOnay.tarih || new Date().toISOString(),
-              red_sebebi: basvuru.danismanOnay.redSebebi,
-              onaylayan_id: onaylayanId
+            red_sebebi: basvuru.danismanOnay.redSebebi,
+            onaylayan_id: onaylayanId
             });
           
           if (onayError) {
-            console.error('Danışman onayı eklenirken hata:', onayError);
-            throw onayError;
-          }
-        } else {
-          console.log('Bu danışman onayı zaten mevcut, yeni kayıt eklenmedi.');
+          console.warn('Audit trail kayıt hatası (devam ediyor):', onayError);
         }
       }
       
       if (basvuru.sksOnay) {
-        // Aynı SKS onayı daha önce eklenmiş mi kontrol et
-        const existingApproval = gecmisData?.find(
-          (onay: any) => onay.onay_tipi === 'SKS' && 
-                  onay.durum === basvuru.sksOnay?.durum && 
-                  (!onay.red_sebebi || onay.red_sebebi === basvuru.sksOnay?.redSebebi)
-        );
+        updateData.sks_onay = {
+          durum: basvuru.sksOnay.durum,
+          tarih: basvuru.sksOnay.tarih || new Date().toISOString(),
+          redSebebi: basvuru.sksOnay.redSebebi,
+          onaylayanId: onaylayanId
+        };
         
-        // Eğer aynı onay kaydı yoksa, yeni bir kayıt ekle
-        if (!existingApproval) {
-          // Kullanıcı ID'sini al
-          const { data: userData } = await supabase.auth.getUser();
-          const onaylayanId = userData?.user?.id;
-          
+        // Audit trail için onay_gecmisi tablosuna da kaydet
           const { error: onayError } = await client
             .from('onay_gecmisi')
             .insert({
               basvuru_id: basvuru.id,
-              onay_kategorisi: 'Etkinlik',
+            onay_kategorisi: 'Etkinlik',
               onay_tipi: 'SKS',
               durum: basvuru.sksOnay.durum,
               tarih: basvuru.sksOnay.tarih || new Date().toISOString(),
-              red_sebebi: basvuru.sksOnay.redSebebi,
-              onaylayan_id: onaylayanId
+            red_sebebi: basvuru.sksOnay.redSebebi,
+            onaylayan_id: onaylayanId
             });
           
           if (onayError) {
-            console.error('SKS onayı eklenirken hata:', onayError);
-            throw onayError;
-          }
-        } else {
-          console.log('Bu SKS onayı zaten mevcut, yeni kayıt eklenmedi.');
+          console.warn('Audit trail kayıt hatası (devam ediyor):', onayError);
         }
       }
+      
+      // JSONB kolonlarını güncelle
+      if (Object.keys(updateData).length > 0) {
+        const { error: updateError } = await client
+          .from('etkinlik_basvurulari')
+          .update(updateData)
+          .eq('id', basvuru.id);
+        
+        if (updateError) {
+          console.error('JSONB onay güncelleme hatası:', updateError);
+          throw updateError;
+        }
+        
+        console.log('✅ JSONB etkinlik onayları güncellendi:', updateData);
+      }
+      
+      // JSONB sisteminde etkinlik onayları direkt JSON kolonlarında tutuluyor
+      // Ayrı durum güncellemesi gerekmiyor
     }
     
     // Sponsorlar varsa güncelle
@@ -760,10 +707,29 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       }
     }
     
-    // Belgeler varsa güncelle
+    // Belgeler varsa güncelle - SADECE belgeler gerçekten değişmişse
+    // Etkinlik onay/red işlemlerinde belgeler korunmalı
     if (basvuru.belgeler && basvuru.belgeler.length > 0) {
-      // Yeni oluşturduğumuz fonksiyonu kullan
+      // Mevcut belgeleri kontrol et
+      const { data: mevcutBelgeler } = await client
+        .from('etkinlik_belgeleri')
+        .select('id, tip, dosya_adi, danisman_onay, sks_onay')
+        .eq('basvuru_id', basvuru.id);
+      
+      // Eğer belge sayısı veya tipleri değişmemişse güncelleme yapma
+      const belgelerDegismis = !mevcutBelgeler || 
+        mevcutBelgeler.length !== basvuru.belgeler.length ||
+        basvuru.belgeler.some((belge, index) => {
+          const mevcut = mevcutBelgeler[index];
+          return !mevcut || mevcut.tip !== belge.tip || mevcut.dosya_adi !== belge.dosyaAdi;
+        });
+      
+      if (belgelerDegismis) {
+        console.log('📄 Belgeler değişmiş, güncelleniyor...');
       await updateBesvuruBelgeleri(basvuru.id, basvuru.belgeler, client);
+      } else {
+        console.log('📄 Belgeler değişmemiş, onay bilgileri korunuyor');
+      }
     }
     
     console.log('Başvuru başarıyla güncellendi.');
@@ -779,120 +745,95 @@ export const clearStorage = async () => {
   try {
     console.log('🧹 Veritabanı temizleme işlemi başlatılıyor...');
     
-    // Bu işlem için admin yetkisi gerekiyor, bu yüzden doğrudan supabaseAdmin kullanıyoruz
     const client = supabaseAdmin;
     
     // Önce kaç kayıt olduğunu kontrol edelim
-    const { count: basvuruCount } = await client
+    const { count: basvuruCount, error: countError } = await client
       .from('etkinlik_basvurulari')
       .select('*', { count: 'exact', head: true });
-    console.log(`📊 Toplam ${basvuruCount} başvuru bulundu`);
+    
+    if (countError) {
+      console.error('❌ Kayıt sayısı alınırken hata:', countError);
+      // Hata olsa da devam et
+    }
+    
+    console.log(`📊 Toplam ${basvuruCount || 0} başvuru bulundu`);
 
-    // 1. Onay geçmişini temizle
-    console.log('🗑️ Onay geçmişi temizleniyor...');
-    const { data: deletedOnay, error: onayError } = await client
-      .from('onay_gecmisi')
+    // Helper function: Güvenli tablo temizleme
+    const safeClearTable = async (tableName: string, dateField = 'created_at') => {
+      try {
+        console.log(`🗑️ ${tableName} temizleniyor...`);
+        const { data, error } = await client
+          .from(tableName)
       .delete()
-      .not('id', 'is', null)
-      .select();
-    
-    if (onayError) {
-      console.error('❌ Onay geçmişi temizlenirken hata:', onayError);
-      throw onayError;
-    }
-    console.log(`✅ ${deletedOnay?.length || 0} onay geçmişi silindi`);
-    
-    // 2. Sponsorları temizle
-    console.log('🗑️ Sponsorlar temizleniyor...');
-    const { data: deletedSponsor, error: sponsorError } = await client
-      .from('sponsorlar')
-      .delete()
-      .not('id', 'is', null)
-      .select();
-    
-    if (sponsorError) {
-      console.error('❌ Sponsorlar temizlenirken hata:', sponsorError);
-      throw sponsorError;
-    }
-    console.log(`✅ ${deletedSponsor?.length || 0} sponsor silindi`);
-    
-    // 3. Konuşmacıları temizle
-    console.log('🗑️ Konuşmacılar temizleniyor...');
-    const { data: deletedKonusmaci, error: konusmaciError } = await client
-      .from('konusmacilar')
-      .delete()
-      .not('id', 'is', null)
-      .select();
-    
-    if (konusmaciError) {
-      console.error('❌ Konuşmacılar temizlenirken hata:', konusmaciError);
-      throw konusmaciError;
-    }
-    console.log(`✅ ${deletedKonusmaci?.length || 0} konuşmacı silindi`);
-    
-    // 4. Ek belgeleri temizle
-    console.log('🗑️ Ek belgeler temizleniyor...');
-    const { data: deletedEkBelge, error: ekBelgeError } = await client
-      .from('ek_belgeler')
-      .delete()
-      .not('id', 'is', null)
-      .select();
-    if (ekBelgeError) {
-      console.error('❌ Ek belgeler temizlenirken hata:', ekBelgeError);
-      throw ekBelgeError;
-    }
-    console.log(`✅ ${deletedEkBelge?.length || 0} ek belge silindi`);
+          .gte(dateField, '1900-01-01')
+          .select();
+        
+        if (error) {
+          console.error(`❌ ${tableName} temizlenirken hata:`, error);
+          return { table: tableName, success: false, error: error.message };
+        } else {
+          console.log(`✅ ${data?.length || 0} ${tableName} kaydı silindi`);
+          return { table: tableName, success: true, count: data?.length || 0 };
+        }
+      } catch (err: any) {
+        console.error(`❌ ${tableName} temizleme hatası:`, err);
+        return { table: tableName, success: false, error: err?.message || err };
+      }
+    };
 
-    // 5. Belgeleri temizle
-    console.log('🗑️ Etkinlik belgeleri temizleniyor...');
-    const { data: deletedBelge, error: belgeError } = await client
-      .from('etkinlik_belgeleri')
-      .delete()
-      .not('id', 'is', null)
-      .select();
-    if (belgeError) {
-      console.error('❌ Belgeler temizlenirken hata:', belgeError);
-      throw belgeError;
-    }
-    console.log(`✅ ${deletedBelge?.length || 0} belge silindi`);
-
-    // 6. Zaman dilimlerini temizle
-    console.log('🗑️ Zaman dilimleri temizleniyor...');
-    const { data: deletedZaman, error: zamanError } = await client
-      .from('etkinlik_zaman_dilimleri')
-      .delete()
-      .not('id', 'is', null)
-      .select();
-    if (zamanError) {
-      console.error('❌ Zaman dilimleri temizlenirken hata:', zamanError);
-      throw zamanError;
-    }
-    console.log(`✅ ${deletedZaman?.length || 0} zaman dilimi silindi`);
+    // Silme işlemlerini sırayla yap (dependency order)
+    const deletionResults = [];
     
-    // 7. Son olarak başvuruları temizle
-    console.log('🗑️ Başvurular temizleniyor...');
-    const { data: deletedBasvuru, error: basvuruError } = await client
-      .from('etkinlik_basvurulari')
-      .delete()
-      .not('id', 'is', null)
-      .select();
+    // 1. Unified onay sistemini temizle
+    deletionResults.push(await safeClearTable('onay_gecmisi'));
     
-    if (basvuruError) {
-      console.error('❌ Başvurular temizlenirken hata:', basvuruError);
-      throw basvuruError;
+    // 2. İlişkili tabloları temizle
+    deletionResults.push(await safeClearTable('sponsorlar'));
+    deletionResults.push(await safeClearTable('konusmacilar'));
+    deletionResults.push(await safeClearTable('ek_belgeler', 'olusturma_tarihi'));
+    deletionResults.push(await safeClearTable('etkinlik_belgeleri'));
+    deletionResults.push(await safeClearTable('etkinlik_zaman_dilimleri'));
+    
+    // 3. Ana tabloyu en son temizle
+    deletionResults.push(await safeClearTable('etkinlik_basvurulari'));
+    
+    // Sonuçları özetle
+    const successCount = deletionResults.filter(r => r.success).length;
+    const failureCount = deletionResults.filter(r => !r.success).length;
+    const totalDeleted = deletionResults.reduce((sum, r) => sum + (r.count || 0), 0);
+    
+    console.log('\n📊 Temizleme Özeti:');
+    console.log(`✅ Başarılı: ${successCount} tablo`);
+    console.log(`❌ Başarısız: ${failureCount} tablo`);
+    console.log(`🗑️ Toplam silinen: ${totalDeleted} kayıt`);
+    
+    // Başarısız olanları listele
+    if (failureCount > 0) {
+      console.log('\n❌ Başarısız tablolar:');
+      deletionResults.filter(r => !r.success).forEach(r => {
+        console.log(`   • ${r.table}: ${r.error}`);
+      });
     }
-    console.log(`✅ ${deletedBasvuru?.length || 0} başvuru silindi`);
     
     // Final kontrol
-    const { count: finalCount } = await client
+    try {
+      const { count: finalCount } = await client
       .from('etkinlik_basvurulari')
-      .select('*', { count: 'exact', head: true });
-    console.log(`📊 İşlem sonrası kalan başvuru sayısı: ${finalCount}`);
+        .select('*', { count: 'exact', head: true });
+      console.log(`\n📊 İşlem sonrası kalan başvuru sayısı: ${finalCount || 0}`);
+    } catch (finalError) {
+      console.log('Final kontrol yapılamadı');
+    }
     
-    console.log('🎉 Tüm etkinlik verileri başarıyla temizlendi!');
+    if (failureCount === 0) {
+      console.log('\n🎉 Tüm etkinlik verileri başarıyla temizlendi!');
+    } else {
+      console.log(`\n⚠️ Temizleme tamamlandı ama ${failureCount} tabloda sorun var!`);
+    }
     
   } catch (error) {
-    console.error('💥 Veriler temizlenirken hata oluştu:', error);
+    console.error('💥 Veriler temizlenirken kritik hata oluştu:', error);
     throw error;
   }
 };
@@ -1055,11 +996,11 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
       revizyon: true,
       danismanOnay: undefined, // Danışman onayını null yap (yeniden onay gerekir)
       sksOnay: undefined, // SKS onayını null yap (yeniden onay gerekir)
-      durum: 'Beklemede',
+      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
       onayGecmisi: {
         // Onay geçmişini taşı, ama yeni bir onay gerektiğini belirterek
-        danismanOnaylari: [...basvuru.onayGecmisi.danismanOnaylari],
-        sksOnaylari: [...basvuru.onayGecmisi.sksOnaylari]
+        danismanOnaylari: [...(basvuru.onayGecmisi?.danismanOnaylari || [])],
+        sksOnaylari: [...(basvuru.onayGecmisi?.sksOnaylari || [])]
       }
     };
     
@@ -1074,7 +1015,7 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
       baslangic_tarihi: orijinal.baslangicTarihi || yeniBasvuru.baslangicTarihi,
       bitis_tarihi: orijinal.bitisTarihi || yeniBasvuru.bitisTarihi,
       aciklama: yeniBasvuru.aciklama,
-      durum: 'Beklemede',
+      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
       revizyon: true,
       orijinal_basvuru_id: basvuru.id // Orijinal başvurunun ID'sini kaydediyoruz
     };
@@ -1160,30 +1101,59 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
       }
     }
     
-    // Belgeler varsa kopyala (revizyon sırasında durum alanı da korunur)
+    // Belgeler varsa kopyala (JSONB onay sistemi ile)
     if (basvuru.belgeler && basvuru.belgeler.length > 0) {
-      // Reddedilen veya beklemede olan belgeleri taşı; onaylı olanlar için yeni onay gerekir
-      const tasinacakBelgeler = basvuru.belgeler.filter(belge => belge.durum !== 'Onaylandı');
+      console.log(`🔄 ${basvuru.belgeler.length} belge revizyon için kontrol ediliyor...`);
+      
+      // Tam onaylanmamış belgeleri taşı (JSONB sistemine uygun)
+      const tasinacakBelgeler = basvuru.belgeler.filter(belge => {
+        const tamOnaylanmis = belge.danismanOnay?.durum === 'Onaylandı' && 
+                             belge.sksOnay?.durum === 'Onaylandı';
+        
+        if (tamOnaylanmis) {
+          console.log(`📋 ${belge.tip} belgesi tam onaylanmış, yeni revizyon için taşınmayacak`);
+        } else {
+          console.log(`📋 ${belge.tip} belgesi taşınacak:`, {
+            danisman: belge.danismanOnay?.durum || 'beklemede',
+            sks: belge.sksOnay?.durum || 'beklemede'
+          });
+        }
+        
+        return !tamOnaylanmis;
+      });
+      
       if (tasinacakBelgeler.length > 0) {
+        console.log(`💾 ${tasinacakBelgeler.length} belge revize başvuruya kopyalanıyor...`);
+        
         const belgeVerileri = tasinacakBelgeler.map(belge => ({
           basvuru_id: yeniBasvuruId,
           tip: belge.tip,
           dosya_adi: belge.dosyaAdi,
           dosya_yolu: belge.dosya,
-          durum: belge.durum || 'Beklemede' // Durum alanını da kopyala
+          // Onay bilgilerini sıfırla - yeni revizyon için yeniden onay gerekir
+          danisman_onay: null,
+          sks_onay: null
         }));
+        
         const { error: belgeError } = await client
           .from('etkinlik_belgeleri')
           .insert(belgeVerileri);
+          
         if (belgeError) {
           console.error('Etkinlik belgeleri kopyalanırken hata:', belgeError);
           throw belgeError;
         }
+        
+        console.log(`✅ ${tasinacakBelgeler.length} belge başarıyla kopyalandı`);
+      } else {
+        console.log('📋 Tüm belgeler onaylanmış, yeni revizyon için belge kopyalanmadı');
       }
     }
 
-    // Ek belgeler varsa kopyala (durumları korunarak)
+    // Ek belgeler varsa kopyala (JSONB onay sistemi ile)
     if (basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0) {
+      console.log(`🔄 ${basvuru.ekBelgeler.length} ek belge revizyon için kopyalanıyor...`);
+      
       const ekBelgeVerileri = basvuru.ekBelgeler.map(ek => ({
         etkinlik_id: yeniBasvuruId,
         tip: ek.tip,
@@ -1191,9 +1161,10 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvur
         dosya_yolu: ek.dosya,
         olusturma_tarihi: ek.olusturmaTarihi || new Date().toISOString(),
         aciklama: ek.aciklama || null,
+        // Onay bilgilerini koru - ek belgeler revizyon sırasında onayları korunabilir
         danisman_onay: ek.danismanOnay || null,
-        sks_onay: ek.sksOnay || null,
-        durum: ek.durum || 'Beklemede'
+        sks_onay: ek.sksOnay || null
+        // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
       }));
 
       const { error: ekBelgeError } = await client
@@ -1768,210 +1739,119 @@ export const etkinlikBelgeSil = async (belgeId: string, dosyaYolu: string): Prom
   }
 };
 
+// Etkinlik Başvuru Durum Güncelleme - Unified onay_gecmisi sistemini kullanır
+// updateEtkinlikDurum fonksiyonu kaldırıldı - JSONB sisteminde gerekli değil
+// Etkinlik onayları artık direkt danisman_onay ve sks_onay JSONB kolonlarında tutuluyor
+
 // Belge onaylama - Unified onay_gecmisi sistemini kullanır
 // Belgenin genel durumunu unified onay sistemine göre günceller
-const updateBelgeDurum = async (belgeId: string, belgeTipi: 'etkinlik_belgeleri' | 'ek_belgeler'): Promise<void> => {
-  try {
-    // Bu belgenin tüm onaylarını al
-    const { data: onaylar } = await supabaseAdmin
-      .from('onay_gecmisi')
-      .select('onay_tipi, durum')
-      .eq('onay_kategorisi', 'Belge')
-      .eq('belge_id', belgeId)
-      .eq('belge_tipi', belgeTipi);
+// updateBelgeDurum fonksiyonu kaldırıldı - artık JSONB onay sistemi kullanılıyor
 
-    if (!onaylar || onaylar.length === 0) {
-      // Onay yoksa 'Beklemede' olarak bırak
-      return;
-    }
 
-    const danismanOnay = onaylar.find(o => o.onay_tipi === 'Danışman');
-    const sksOnay = onaylar.find(o => o.onay_tipi === 'SKS');
 
-    let yeniDurum: string;
-
-    // Durum belirleme mantığı
-    if (danismanOnay?.durum === 'Reddedildi' || sksOnay?.durum === 'Reddedildi') {
-      yeniDurum = 'Reddedildi';
-    } else if (danismanOnay?.durum === 'Onaylandı' && sksOnay?.durum === 'Onaylandı') {
-      yeniDurum = 'Onaylandı';
-    } else {
-      yeniDurum = 'Beklemede';
-    }
-
-    // Belgenin durum alanını güncelle
-    const { error } = await supabase
-      .from(belgeTipi)
-      .update({ durum: yeniDurum })
-      .eq('id', belgeId);
-
-    if (error) {
-      console.error('Belge durum güncelleme hatası:', error);
-    } else {
-      console.log(`Belge ${belgeId} durumu güncellendi: ${yeniDurum}`);
-    }
-
-  } catch (error) {
-    console.error('updateBelgeDurum hatası:', error);
-  }
-};
-
-export const belgeOnayla = async (
-  belgeId: string, 
-  onayTipi: 'Danışman' | 'SKS'
-): Promise<boolean> => {
-  try {
-    console.log(`${onayTipi} tarafından ID: ${belgeId} olan belge onaylanıyor...`);
-    
-    // Önce kullanıcının oturum bilgilerini kontrol et
-    const { data: sessionData } = await supabase.auth.getSession();
-    
-    if (!sessionData.session) {
-      console.error('Belge onaylamak için oturum açık olmalıdır');
-      throw new Error('Oturum açık değil');
-    }
-
-    // Kullanıcı bilgilerini al
-    const { data: userData } = await supabase.auth.getUser();
-    const onaylayanId = userData?.user?.id;
-    
-    // onay_gecmisi tablosuna onay kaydı ekle
-    const { error: onayError } = await supabaseAdmin
-      .from('onay_gecmisi')
-      .insert({
-        onay_kategorisi: 'Belge',
-        belge_id: belgeId,
-        belge_tipi: 'etkinlik_belgeleri',
-        onay_tipi: onayTipi,
-        durum: 'Onaylandı',
-        tarih: new Date().toISOString(),
-        onaylayan_id: onaylayanId
-      });
-    
-    if (onayError) {
-      console.error(`Belge onaylama hatası:`, onayError);
-      throw onayError;
-    }
-    
-    // Belgenin genel durumunu kontrol et ve güncelle
-    await updateBelgeDurum(belgeId, 'etkinlik_belgeleri');
-    
-    console.log(`Belge başarıyla onaylandı: ${belgeId}`);
-    return true;
-  } catch (error) {
-    console.error('Belge onaylama işlemi başarısız:', error);
-    return false;
-  }
-};
-
-export const belgeReddet = async (
-  belgeId: string,
-  onayTipi: 'Danışman' | 'SKS',
-  redSebebi: string
-): Promise<boolean> => {
-  try {
-    console.log(`${onayTipi} tarafından ID: ${belgeId} olan belge reddediliyor...`);
-    
-    // Önce kullanıcının oturum bilgilerini kontrol et
-    const { data: sessionData } = await supabase.auth.getSession();
-    
-    // Eğer oturum yoksa hata döndür
-    if (!sessionData.session) {
-      console.error('Belge reddetmek için oturum açık olmalıdır');
-      throw new Error('Oturum açık değil');
-    }
-    
-    // Red sebebi boş olamaz
-    if (!redSebebi.trim()) {
-      throw new Error('Red sebebi belirtilmelidir');
-    }
-
-    // Kullanıcı bilgilerini al
-    const { data: userData } = await supabase.auth.getUser();
-    const onaylayanId = userData?.user?.id;
-    
-    // onay_gecmisi tablosuna red kaydı ekle
-    const { error: redError } = await supabaseAdmin
-      .from('onay_gecmisi')
-      .insert({
-        onay_kategorisi: 'Belge',
-        belge_id: belgeId,
-        belge_tipi: 'etkinlik_belgeleri',
-        onay_tipi: onayTipi,
-        durum: 'Reddedildi',
-        tarih: new Date().toISOString(),
-        red_sebebi: redSebebi,
-        onaylayan_id: onaylayanId
-      });
-    
-    if (redError) {
-      console.error(`Belge reddetme hatası:`, redError);
-      throw redError;
-    }
-    
-    // Belgenin genel durumunu kontrol et ve güncelle
-    await updateBelgeDurum(belgeId, 'etkinlik_belgeleri');
-    
-    console.log(`Belge başarıyla reddedildi: ${belgeId}`);
-    return true;
-  } catch (error) {
-    console.error('Belge reddetme işlemi başarısız:', error);
-    return false;
-  }
-};
-
-// Belgeleri silip tekrar eklemek için kullanılacak fonksiyon
+// Akıllı belge güncelleme - sadece değişenleri güncelle
 const updateBesvuruBelgeleri = async (
   basvuruId: string, 
   belgeler: EtkinlikBelge[], 
   client: any
 ): Promise<void> => {
   if (belgeler && belgeler.length > 0) {
-    console.log('🔄 Belgeler güncelleniyor:', belgeler.length, 'adet');
+    console.log('🔄 Belgeler akıllı güncelleniyor:', belgeler.length, 'adet');
     
-    // Önce eski belgeleri sil
+    // Mevcut belgeleri al
+    const { data: mevcutBelgeler } = await client
+      .from('etkinlik_belgeleri')
+      .select('id, tip, dosya_adi, dosya_yolu, danisman_onay, sks_onay')
+      .eq('basvuru_id', basvuruId);
+    
+    console.log('📋 Mevcut belgeler:', mevcutBelgeler?.length || 0, 'adet');
+    
+    // Her yeni belge için kontrol et
+    for (const yeniBelge of belgeler) {
+      if (typeof yeniBelge.dosya === 'string') {
+        const yeniBelgeTip = yeniBelge.tip;
+        const yeniBelgeAdi = yeniBelge.dosyaAdi;
+        const yeniBelgeYolu = yeniBelge.dosya;
+        
+        // Aynı tipte mevcut belge var mı?
+        const mevcutBelge = mevcutBelgeler?.find((m: any) => m.tip === yeniBelgeTip);
+        
+        if (mevcutBelge) {
+          // Aynı belge mi yoksa yeni bir belge mi?
+          const ayniBelge = mevcutBelge.dosya_adi === yeniBelgeAdi && 
+                           mevcutBelge.dosya_yolu === yeniBelgeYolu;
+          
+          if (ayniBelge) {
+            console.log(`✅ ${yeniBelgeTip} belgesinde değişiklik yok, atlanıyor`);
+            continue; // Değişiklik yok, bu belgeyi atla
+          } else {
+            console.log(`🔄 ${yeniBelgeTip} belgesi değişmiş, güncelleniyor:`, {
+              eski: mevcutBelge.dosya_adi,
+              yeni: yeniBelgeAdi,
+              onaySifirlaniyor: 'Yeni belge yüklendi, onay süreci sıfırlandı'
+            });
+            
+            // Eski belgeyi sil
     const { error: silmeError } = await client
       .from('etkinlik_belgeleri')
       .delete()
-      .eq('basvuru_id', basvuruId);
+              .eq('id', mevcutBelge.id);
     
     if (silmeError) {
-      console.error('❌ Eski belgeler silinirken hata:', silmeError);
+              console.error(`❌ Eski ${yeniBelgeTip} belgesi silinirken hata:`, silmeError);
       throw silmeError;
     }
     
-    // Belgeleri hazırla (unified sistem ile uyumlu)
-    const belgeVerileri = [];
-    
-    for (const belge of belgeler) {
-      if (typeof belge.dosya === 'string') {
-        belgeVerileri.push({
-          basvuru_id: basvuruId,
-          tip: belge.tip,
-          dosya_adi: belge.dosyaAdi,
-          dosya_yolu: belge.dosya,
-          durum: belge.durum || 'Beklemede' // YENİ: Unified sistem uyumlu durum
-        });
+            // Yeni belgeyi temiz onay durumu ile ekle (belge değiştiği için onay süreci sıfırlanır)
+            const { error: eklemeError } = await client
+              .from('etkinlik_belgeleri')
+              .insert({
+        basvuru_id: basvuruId,
+                tip: yeniBelgeTip,
+                dosya_adi: yeniBelgeAdi,
+                dosya_yolu: yeniBelgeYolu,
+                // Yeni belge = yeni onay süreci (sıfırlanır)
+                danisman_onay: null,
+                sks_onay: null
+              });
+            
+            if (eklemeError) {
+              console.error(`❌ Yeni ${yeniBelgeTip} belgesi eklenirken hata:`, eklemeError);
+              throw eklemeError;
+            }
+            
+            console.log(`✅ ${yeniBelgeTip} belgesi başarıyla güncellendi (onay süreci sıfırlandı)`);
+          }
+        } else {
+          console.log(`➕ Yeni ${yeniBelgeTip} belgesi ekleniyor`);
+          
+          // Yeni belge tipi, direkt ekle
+          const { error: eklemeError } = await client
+        .from('etkinlik_belgeleri')
+            .insert({
+              basvuru_id: basvuruId,
+              tip: yeniBelgeTip,
+              dosya_adi: yeniBelgeAdi,
+              dosya_yolu: yeniBelgeYolu,
+              // Yeni belge için onay bilgileri yok
+              danisman_onay: yeniBelge.danismanOnay || null,
+              sks_onay: yeniBelge.sksOnay || null
+            });
+          
+          if (eklemeError) {
+            console.error(`❌ Yeni ${yeniBelgeTip} belgesi eklenirken hata:`, eklemeError);
+            throw eklemeError;
+          }
+          
+          console.log(`✅ Yeni ${yeniBelgeTip} belgesi başarıyla eklendi`);
+        }
       } else {
         // File nesnesi varsa şimdilik atla - ayrı yükleme süreciyle halledilecek
-        console.log('📁 File nesnesi atlandı:', belge.dosyaAdi);
+        console.log('📁 File nesnesi atlandı:', yeniBelge.dosyaAdi);
       }
     }
     
-    if (belgeVerileri.length > 0) {
-      console.log('💾 Kaydedilecek belge verisi:', belgeVerileri);
-      
-      const { error: belgeError } = await client
-        .from('etkinlik_belgeleri')
-        .insert(belgeVerileri);
-      
-      if (belgeError) {
-        console.error('❌ Yeni belgeler eklenirken hata:', belgeError);
-        throw belgeError;
-      }
-      
-      console.log('✅ Belgeler başarıyla güncellendi');
-    }
+    console.log('✅ Tüm belgeler akıllı güncelleme tamamlandı');
   }
 };
 
@@ -2077,7 +1957,7 @@ export const ekBelgeYukle = async (
             dosya_adi: belge.dosyaAdi,
             dosya_yolu: fakeUrl,
             aciklama: belge.aciklama,
-            durum: 'Beklemede',
+            // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
             olusturma_tarihi: new Date().toISOString()
           })
           .select('id')
@@ -2103,7 +1983,7 @@ export const ekBelgeYukle = async (
           dosya_adi: belge.dosyaAdi,
           dosya_yolu: storageData.path,
           aciklama: belge.aciklama,
-          durum: 'Beklemede',
+          // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
           olusturma_tarihi: new Date().toISOString()
         })
         .select('id')
@@ -2137,7 +2017,7 @@ export const getEkBelgeler = async (etkinlikId: string): Promise<EkBelge[]> => {
     // Önce etkinliğin var olup olmadığını kontrol edelim
     const { data: etkinlikData, error: etkinlikError } = await supabase
       .from('etkinlik_basvurulari')
-      .select('id, etkinlik_adi, durum')
+      .select('id, etkinlik_adi, danisman_onay, sks_onay')
       .eq('id', etkinlikId)
       .single();
     
@@ -2188,8 +2068,8 @@ export const getEkBelgeler = async (etkinlikId: string): Promise<EkBelge[]> => {
       olusturmaTarihi: belge.olusturma_tarihi,
       danismanOnay: belge.danisman_onay,
       sksOnay: belge.sks_onay,
-      aciklama: belge.aciklama,
-      durum: belge.durum
+      aciklama: belge.aciklama
+      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
     }));
     
     return ekBelgeler;
@@ -2233,86 +2113,7 @@ export const ekBelgeIndir = async (dosyaYolu: string): Promise<string | null> =>
   }
 };
 
-// Ek belge onaylama - Unified onay_gecmisi sistemini kullanır
-export const ekBelgeOnayla = async (belgeId: string, onaylayan: 'Danışman' | 'SKS'): Promise<boolean> => {
-  try {
-    console.log(`${onaylayan} tarafından ek belge onaylanıyor: ${belgeId}`);
-    
-    // Kullanıcı bilgilerini al
-    const { data: userData } = await supabase.auth.getUser();
-    const onaylayanId = userData?.user?.id;
-    
-    // onay_gecmisi tablosuna onay kaydı ekle
-    const { error: onayError } = await supabaseAdmin
-      .from('onay_gecmisi')
-      .insert({
-        onay_kategorisi: 'Belge',
-        belge_id: belgeId,
-        belge_tipi: 'ek_belgeler',
-        onay_tipi: onaylayan,
-        durum: 'Onaylandı',
-        tarih: new Date().toISOString(),
-        onaylayan_id: onaylayanId
-      });
-    
-    if (onayError) {
-      console.error('Ek belge onaylama hatası:', onayError);
-      throw onayError;
-    }
-    
-    // Belgenin genel durumunu kontrol et ve güncelle
-    await updateBelgeDurum(belgeId, 'ek_belgeler');
-    
-    console.log('Ek belge başarıyla onaylandı');
-    return true;
-  } catch (error) {
-    console.error('Ek belge onaylama işlemi başarısız oldu:', error);
-    return false;
-  }
-};
 
-// Ek belge reddetme - Unified onay_gecmisi sistemini kullanır
-export const ekBelgeReddet = async (belgeId: string, reddeden: 'Danışman' | 'SKS', redSebebi: string): Promise<boolean> => {
-  try {
-    console.log(`${reddeden} tarafından ek belge reddediliyor: ${belgeId}`);
-    
-    if (!redSebebi.trim()) {
-      throw new Error('Red sebebi belirtilmelidir');
-    }
-
-    // Kullanıcı bilgilerini al
-    const { data: userData } = await supabase.auth.getUser();
-    const onaylayanId = userData?.user?.id;
-    
-    // onay_gecmisi tablosuna red kaydı ekle
-    const { error: redError } = await supabaseAdmin
-      .from('onay_gecmisi')
-      .insert({
-        onay_kategorisi: 'Belge',
-        belge_id: belgeId,
-        belge_tipi: 'ek_belgeler',
-        onay_tipi: reddeden,
-        durum: 'Reddedildi',
-        tarih: new Date().toISOString(),
-        red_sebebi: redSebebi,
-        onaylayan_id: onaylayanId
-      });
-    
-    if (redError) {
-      console.error('Ek belge reddetme hatası:', redError);
-      throw redError;
-    }
-    
-    // Belgenin genel durumunu kontrol et ve güncelle
-    await updateBelgeDurum(belgeId, 'ek_belgeler');
-    
-    console.log('Ek belge başarıyla reddedildi');
-    return true;
-  } catch (error) {
-    console.error('Ek belge reddetme işlemi başarısız oldu:', error);
-    return false;
-  }
-};
 
 // Test amaçlı ek belge oluşturma fonksiyonu
 export const createTestEkBelge = async (etkinlikId: string) => {
@@ -2322,7 +2123,7 @@ export const createTestEkBelge = async (etkinlikId: string) => {
     // Önce etkinliğin var olup olmadığını kontrol edelim
     const { data: etkinlikData, error: etkinlikError } = await supabase
       .from('etkinlik_basvurulari')
-      .select('id, etkinlik_adi, durum')
+      .select('id, etkinlik_adi, danisman_onay, sks_onay')
       .eq('id', etkinlikId)
       .single();
     
@@ -2340,8 +2141,8 @@ export const createTestEkBelge = async (etkinlikId: string) => {
       dosya_adi: 'test_belgesi.pdf',
       dosya_yolu: 'test_path/test_belgesi.pdf',
       aciklama: 'Bu bir test belgesidir',
-      olusturma_tarihi: new Date().toISOString(),
-      durum: 'Beklemede'
+      olusturma_tarihi: new Date().toISOString()
+      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
     };
     
     console.log('Oluşturulacak ek belge:', ekBelgeData);
@@ -2478,7 +2279,7 @@ export const resetBelgeOnaylari = async (
     if (tip === 'ek' || tip === 'hepsi') {
       const { error: e2 } = await client
         .from('ek_belgeler')
-        .update({ danisman_onay: null, sks_onay: null, durum: 'Beklemede' })
+        .update({ danisman_onay: null, sks_onay: null }) // durum kolonu kaldırıldı
         .eq('etkinlik_id', etkinlikId);
       if (e2) throw e2;
     }
@@ -2489,3 +2290,201 @@ export const resetBelgeOnaylari = async (
     return null;
   }
 };
+
+// JSONB Belge Onay Fonksiyonları
+export const belgeOnayla = async (
+  belgeId: string,
+  onayTipi: 'Danışman' | 'SKS'
+): Promise<boolean> => {
+  try {
+    console.log(`${onayTipi} tarafından ID: ${belgeId} olan belge onaylanıyor...`);
+    
+    // Kullanıcı bilgilerini al
+    const { data: userData } = await supabase.auth.getUser();
+    const onaylayanId = userData?.user?.id;
+    
+    // Hangi tablodan olduğunu belirle
+    let belgeTipi: 'etkinlik_belgeleri' | 'ek_belgeler' = 'etkinlik_belgeleri';
+    
+    // Önce etkinlik_belgeleri'nde kontrol et
+    const { data: etkinlikBelgesi } = await supabaseAdmin
+      .from('etkinlik_belgeleri')
+      .select('id')
+      .eq('id', belgeId)
+      .single();
+    
+    // Bulunamadıysa ek_belgeler'de olabilir
+    if (!etkinlikBelgesi) {
+      const { data: ekBelge } = await supabaseAdmin
+        .from('ek_belgeler')
+        .select('id')
+        .eq('id', belgeId)
+        .single();
+      
+      if (ekBelge) {
+        belgeTipi = 'ek_belgeler';
+      } else {
+        console.error('Belge bulunamadı:', belgeId);
+        throw new Error('Belge bulunamadı');
+      }
+    }
+    
+    console.log(`Belge tipi belirlendi: ${belgeTipi}`);
+    
+    // JSONB onay bilgisi hazırla
+    const onayBilgisi = {
+      durum: 'Onaylandı',
+      tarih: new Date().toISOString(),
+      redSebebi: null,
+      onaylayanId: onaylayanId
+    };
+    
+    // Hangi JSONB kolonunu güncelleyeceğimizi belirle
+    const onayKolonu = onayTipi === 'Danışman' ? 'danisman_onay' : 'sks_onay';
+    
+    // JSONB kolonunu güncelle
+    const { data, error: updateError } = await supabaseAdmin
+      .from(belgeTipi)
+      .update({ [onayKolonu]: onayBilgisi })
+      .eq('id', belgeId)
+      .select();
+    
+    if (updateError) {
+      console.error(`JSONB onay güncelleme hatası:`, updateError);
+      throw updateError;
+    }
+    
+    console.log(`✅ ${belgeTipi} tablosundaki belge başarıyla onaylandı: ${belgeId}`);
+    console.log(`✅ Güncellenen ${onayKolonu}:`, onayBilgisi);
+    
+    // Audit trail için onay_gecmisi tablosuna da kaydet
+    const { error: onayError } = await supabaseAdmin
+      .from('onay_gecmisi')
+      .insert({
+        onay_kategorisi: 'Belge',
+        belge_id: belgeId,
+        belge_tipi: belgeTipi,
+        onay_tipi: onayTipi,
+        durum: 'Onaylandı',
+        tarih: new Date().toISOString(),
+        onaylayan_id: onaylayanId
+      });
+    
+    if (onayError) {
+      console.warn(`Audit trail kayıt hatası (devam ediyor):`, onayError);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Belge onaylama işlemi başarısız:', error);
+    return false;
+  }
+};
+
+export const belgeReddet = async (
+  belgeId: string,
+  onayTipi: 'Danışman' | 'SKS',
+  redSebebi: string
+): Promise<boolean> => {
+  try {
+    console.log(`${onayTipi} tarafından ID: ${belgeId} olan belge reddediliyor...`);
+    
+    if (!redSebebi.trim()) {
+      throw new Error('Red sebebi belirtilmelidir');
+    }
+
+    // Kullanıcı bilgilerini al
+    const { data: userData } = await supabase.auth.getUser();
+    const onaylayanId = userData?.user?.id;
+    
+    // Hangi tablodan olduğunu belirle
+    let belgeTipi: 'etkinlik_belgeleri' | 'ek_belgeler' = 'etkinlik_belgeleri';
+    
+    // Önce etkinlik_belgeleri'nde kontrol et
+    const { data: etkinlikBelgesi } = await supabaseAdmin
+      .from('etkinlik_belgeleri')
+      .select('id')
+      .eq('id', belgeId)
+      .single();
+    
+    // Bulunamadıysa ek_belgeler'de olabilir
+    if (!etkinlikBelgesi) {
+      const { data: ekBelge } = await supabaseAdmin
+        .from('ek_belgeler')
+        .select('id')
+        .eq('id', belgeId)
+        .single();
+      
+      if (ekBelge) {
+        belgeTipi = 'ek_belgeler';
+      } else {
+        console.error('Belge bulunamadı:', belgeId);
+        throw new Error('Belge bulunamadı');
+      }
+    }
+    
+    console.log(`Belge tipi belirlendi: ${belgeTipi}`);
+    
+    // JSONB red bilgisi hazırla
+    const redBilgisi = {
+      durum: 'Reddedildi',
+      tarih: new Date().toISOString(),
+      redSebebi: redSebebi,
+      onaylayanId: onaylayanId
+    };
+    
+    // Hangi JSONB kolonunu güncelleyeceğimizi belirle
+    const onayKolonu = onayTipi === 'Danışman' ? 'danisman_onay' : 'sks_onay';
+    
+    // JSONB kolonunu güncelle
+    const { data, error: updateError } = await supabaseAdmin
+      .from(belgeTipi)
+      .update({ [onayKolonu]: redBilgisi })
+      .eq('id', belgeId)
+      .select();
+    
+    if (updateError) {
+      console.error(`JSONB red güncelleme hatası:`, updateError);
+      throw updateError;
+    }
+    
+    console.log(`✅ ${belgeTipi} tablosundaki belge başarıyla reddedildi: ${belgeId}`);
+    console.log(`✅ Güncellenen ${onayKolonu}:`, redBilgisi);
+    
+    // Audit trail için onay_gecmisi tablosuna da kaydet
+    const { error: redError } = await supabaseAdmin
+      .from('onay_gecmisi')
+      .insert({
+        onay_kategorisi: 'Belge',
+        belge_id: belgeId,
+        belge_tipi: belgeTipi,
+        onay_tipi: onayTipi,
+        durum: 'Reddedildi',
+        tarih: new Date().toISOString(),
+        red_sebebi: redSebebi,
+        onaylayan_id: onaylayanId
+      });
+    
+    if (redError) {
+      console.warn(`Audit trail kayıt hatası (devam ediyor):`, redError);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Belge reddetme işlemi başarısız:', error);
+    return false;
+  }
+};
+
+// Ek belge fonksiyonları
+export const ekBelgeOnayla = async (belgeId: string, onaylayan: 'Danışman' | 'SKS'): Promise<boolean> => {
+  return belgeOnayla(belgeId, onaylayan);
+};
+
+export const ekBelgeReddet = async (belgeId: string, reddeden: 'Danışman' | 'SKS', redSebebi: string): Promise<boolean> => {
+  return belgeReddet(belgeId, reddeden, redSebebi);
+};
+
+
+
+

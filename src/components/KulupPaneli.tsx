@@ -139,7 +139,7 @@ export function KulupPaneli() {
   const reddedilenBasvurular = basvurular.filter(b => {
     const isDanisman = b.danismanOnay?.durum === 'Reddedildi';
     const isSks = b.sksOnay?.durum === 'Reddedildi';
-    const isReddedilmis = isDanisman || isSks || b.durum === 'Reddedildi';
+    const isReddedilmis = isDanisman || isSks; // durum kolonu kaldırıldı
     const isRevizyon = b.revizyon === true;
     const isRevizeEdilmemis = !revizeEdilenBasvuruIdleri.has(b.id);
     return isReddedilmis && !isRevizyon && isRevizeEdilmemis;
@@ -180,7 +180,7 @@ export function KulupPaneli() {
 
   // Onay Bekleyenler (tek liste): Reddedilmemiş ve tamamlanmamış tüm başvurular
   const isRejected = (b: EtkinlikBasvuru) =>
-    b.durum === 'Reddedildi' || b.danismanOnay?.durum === 'Reddedildi' || b.sksOnay?.durum === 'Reddedildi';
+    b.danismanOnay?.durum === 'Reddedildi' || b.sksOnay?.durum === 'Reddedildi'; // durum kolonu kaldırıldı
   const isCompleted = (b: EtkinlikBasvuru) => b.sksOnay?.durum === 'Onaylandı' && allDocsSksApproved(b);
   const onayBekleyenlerBirlesik = basvurular.filter(b => !isRejected(b) && !isCompleted(b));
 
@@ -301,7 +301,7 @@ export function KulupPaneli() {
             </h2>
             <div className="space-y-3">
               {surecTamamlandi.map((basvuru) => (
-                <BasvuruKart key={basvuru.id} basvuru={basvuru} onRevize={handleRevize} />
+                <BasvuruKart key={basvuru.id} basvuru={basvuru} onRevize={handleRevize} showDetailedStatuses />
               ))}
               {surecTamamlandi.length === 0 && (
                 <div className="text-center py-8 text-gray-500">Tamamlanan başvuru bulunmamaktadır.</div>

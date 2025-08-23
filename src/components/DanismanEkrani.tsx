@@ -69,65 +69,57 @@ export function DanismanEkrani() {
           console.log('Onaylanmamış ek belgesi olan etkinlikler:', onaylanmamisEkBelgesiOlanlar.length);
           setBekleyenEkBelgeSayisi(onaylanmamisEkBelgesiOlanlar.length);
           
-          // 1. Başvuruları danışman onayı olmayanlar (bekleyenler) ve olanlar (incelenenler) olarak ayır
-          // FIXME: Burada !b.danismanOnay kullanarak danışman onayı olmayanları alıyoruz
-          // Bu şekilde, hem undefined olanlar (hiç onaylanmış) hem de null olanlar (revize edilmiş) dahil olacak
-          const bekleyenBasvurular = allBasvurular.filter(b => {
-            // DanışmanOnay null veya undefined olabilir, her ikisi de onay bekliyor demektir
-            const danismanOnayYok = b.danismanOnay === undefined || b.danismanOnay === null;
-            console.log(`Başvuru ${b.id} - Danışman onayı: ${danismanOnayYok ? 'YOK' : 'VAR'}, revizyon: ${b.revizyon}`);
-            return danismanOnayYok;
-          });
-          
-          console.log(`${bekleyenBasvurular.length} bekleyen başvuru bulundu`);
-          // 2. Onay bekleyen (hem etkinlik hem belgeler) listesi
-          setEtkinlikVeBelgelerOnayBekleyenler(bekleyenBasvurular);
-          
-          // Danışman tarafından onaylanan veya reddedilen başvurular
-          const incelenenBasvurular = allBasvurular.filter(b => b.danismanOnay !== undefined && b.danismanOnay !== null);
-          console.log(`${incelenenBasvurular.length} incelenmiş başvuru bulundu`);
-          setTumBasvurular(incelenenBasvurular);
-
-          // Danışman onayı bekleyen ek belgeleri listele ("Onaylanmamış Belgeler" bölümü için)
-          const bekleyenEkBelgelerListesi: {
-            etkinlikId: string;
-            etkinlikAdi: string;
-            kulupAdi: string;
-            belgeSayisi: number;
-          }[] = [];
-          allBasvurular.forEach(b => {
-            const bekleyen = (b.ekBelgeler || []).filter(ek => !ek.danismanOnay);
-            if (bekleyen.length > 0) {
-              bekleyenEkBelgelerListesi.push({
-                etkinlikId: b.id,
-                etkinlikAdi: b.etkinlikAdi,
-                kulupAdi: b.kulupAdi,
-                belgeSayisi: bekleyen.length,
-              });
+          // 1️⃣ ONAY BEKLEYEN ETKİNLİKLER (Etkinlik onayı yok)
+          const bekleyenEtkinlikler = allBasvurular.filter(b => {
+            const etkinlikOnayYok = !b.danismanOnay;
+            if (etkinlikOnayYok) {
+              console.log(`📋 Onay bekleyen etkinlik: ${b.etkinlikAdi}`);
             }
+            return etkinlikOnayYok;
           });
-          setOnaylanmamisEkBelgeler(bekleyenEkBelgelerListesi);
-
-          // Etkinliği onaylanmış, ana belgeleri onay bekleyen başvurular
-          const etkinlikOnayliBelgeleriBekleyenListesi: {
+          
+          console.log(`🎯 ${bekleyenEtkinlikler.length} onay bekleyen etkinlik bulundu`);
+          setEtkinlikVeBelgelerOnayBekleyenler(bekleyenEtkinlikler);
+          
+          // 2️⃣ ETKİNLİK ONAYLI, BELGELER BEKLİYOR 
+          const etkinlikOnayliBelgeBekleyenListesi: {
             etkinlikId: string;
             etkinlikAdi: string;
             kulupAdi: string;
             belgeSayisi: number;
           }[] = [];
+          
           allBasvurular.forEach(b => {
             const etkinlikOnayli = b.danismanOnay?.durum === 'Onaylandı';
             const bekleyenAnaBelgeler = (b.belgeler || []).filter(doc => !doc.danismanOnay);
-            if (etkinlikOnayli && bekleyenAnaBelgeler.length > 0) {
-              etkinlikOnayliBelgeleriBekleyenListesi.push({
+            const bekleyenEkBelgeler = (b.ekBelgeler || []).filter(ek => !ek.danismanOnay);
+            const toplamBekleyenBelge = bekleyenAnaBelgeler.length + bekleyenEkBelgeler.length;
+            
+            if (etkinlikOnayli && toplamBekleyenBelge > 0) {
+              console.log(`📋 Etkinlik onaylı belgeler bekliyor: ${b.etkinlikAdi} (${toplamBekleyenBelge} belge)`);
+              etkinlikOnayliBelgeBekleyenListesi.push({
                 etkinlikId: b.id,
                 etkinlikAdi: b.etkinlikAdi,
                 kulupAdi: b.kulupAdi,
-                belgeSayisi: bekleyenAnaBelgeler.length,
+                belgeSayisi: toplamBekleyenBelge
               });
             }
           });
-          setEtkinligiOnaylanmisBelgeleriBekleyen(etkinlikOnayliBelgeleriBekleyenListesi);
+          
+          console.log(`✅ ${etkinlikOnayliBelgeBekleyenListesi.length} etkinlik onaylı belge bekleyen bulundu`);
+          setEtkinligiOnaylanmisBelgeleriBekleyen(etkinlikOnayliBelgeBekleyenListesi);
+          
+          // 3️⃣ TAMAMLANMIŞ ETKİNLİKLER (Her şey onaylı)
+          const tamamlanmisEtkinlikler = allBasvurular.filter(b => {
+            const etkinlikOnayli = b.danismanOnay?.durum === 'Onaylandı';
+            const tumAnaBelgelerOnayli = (b.belgeler || []).every(doc => doc.danismanOnay?.durum === 'Onaylandı');
+            const tumEkBelgelerOnayli = (b.ekBelgeler || []).every(ek => ek.danismanOnay?.durum === 'Onaylandı');
+            
+            return etkinlikOnayli && tumAnaBelgelerOnayli && tumEkBelgelerOnayli;
+          });
+          
+          console.log(`✅ ${tamamlanmisEtkinlikler.length} tamamlanmış etkinlik bulundu`);
+          setTumBasvurular(tamamlanmisEtkinlikler);
           
           // Ek belgeleri kontrol edelim
           console.log('Ek belge kontrolü başlıyor...');
@@ -188,88 +180,77 @@ export function DanismanEkrani() {
     setRedSebebi('');
   };
 
+  // Etkinlik Onay Fonksiyonu
   const handleOnay = async () => {
-    if (secilenBasvuru) {
-      // Kural: Danışman etkinlik bilgisini belgelerden bağımsız onaylayabilir.
-      // SKS listesine düşme, etkinlik onayıyla olur; danışman onaylı belgeler geldikçe bu etkinliğe referanslı olarak SKS ek belge listesine ayrı ayrı düşer.
-      
-      let durum = secilenBasvuru.durum;
-      if (secilenBasvuru.sksOnay?.durum === 'Onaylandı') {
-        durum = 'Onaylandı';
-      }
-      
-      const guncelBasvuru: EtkinlikBasvuru = {
-        ...secilenBasvuru,
-        danismanOnay: {
-          durum: 'Onaylandı',
-          tarih: new Date().toISOString()
-        },
-        sksOnay: secilenBasvuru.sksOnay,
-        durum: durum
-      };
-      
-      try {
-        await updateBasvuru(guncelBasvuru);
-        alert('Başvuru danışman tarafından onaylandı.');
-        await refreshLists();
-        
-        // Email bildirimini gönder
-        try {
-          await sendDanismanOnayNotification(guncelBasvuru);
-          console.log('Danışman onay bildirimi gönderildi');
-        } catch (emailError) {
-          console.error('Onay e-posta bildirimi gönderilirken hata:', emailError);
-          // E-posta gönderiminde hata olsa bile işleme devam et
-        }
-        
-        // Kaldırıldı: Onaylanan başvuruyu revize/yeni listelerinden çıkarma
-        setSecilenBasvuru(null);
-        // refreshLists zaten state'leri güncelledi
-      } catch (error) {
-        console.error('Başvuru onaylama hatası:', error);
-        alert('Başvuru onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
-      }
-    }
-  };
-
-  const handleRed = async () => {
-    if (!redSebebi.trim() || !secilenBasvuru) {
-      alert('Lütfen red sebebini belirtiniz!');
-      return;
-    }
+    if (!secilenBasvuru) return;
     
+    // JSONB güncellemesi için object oluştur
     const guncelBasvuru: EtkinlikBasvuru = {
       ...secilenBasvuru,
       danismanOnay: {
-        durum: 'Reddedildi',
+        durum: 'Onaylandı',
         tarih: new Date().toISOString(),
-        redSebebi
+        redSebebi: undefined
       },
-      sksOnay: secilenBasvuru.sksOnay,
-      durum: 'Reddedildi'
+      sksOnay: secilenBasvuru.sksOnay
     };
     
     try {
       await updateBasvuru(guncelBasvuru);
       
-      // Email bildirimini gönder
+      // E-posta bildirimi gönder
       try {
-        await sendDanismanRedNotification(guncelBasvuru, redSebebi);
-        console.log('Danışman red bildirimi gönderildi');
+        await sendDanismanOnayNotification(secilenBasvuru);
       } catch (emailError) {
-        console.error('Red e-posta bildirimi gönderilirken hata:', emailError);
-        // E-posta gönderiminde hata olsa bile işleme devam et
+        console.error('Onay e-posta bildirimi gönderilirken hata:', emailError);
       }
       
-      // Kaldırıldı: Reddedilen başvuruyu revize/yeni listelerinden çıkarma
       setSecilenBasvuru(null);
-      setRedSebebi('');
-      setTumBasvurular([...tumBasvurular, guncelBasvuru]);
+      // Listeyi yenile
+      refreshLists();
     } catch (error) {
-      console.error('Başvuru reddetme hatası:', error);
-      alert('Başvuru reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
+      console.error('Başvuru onaylanırken hata:', error);
     }
   };
+
+  // Etkinlik Red Fonksiyonu
+  const handleRed = async () => {
+    if (!secilenBasvuru || !redSebebi.trim()) {
+      alert('Lütfen red sebebi belirtiniz.');
+      return;
+    }
+    
+    // JSONB güncellemesi için object oluştur
+    const guncelBasvuru: EtkinlikBasvuru = {
+      ...secilenBasvuru,
+      danismanOnay: {
+        durum: 'Reddedildi',
+        tarih: new Date().toISOString(),
+        redSebebi: redSebebi.trim()
+      },
+      sksOnay: secilenBasvuru.sksOnay
+    };
+    
+    try {
+      await updateBasvuru(guncelBasvuru);
+      
+      // E-posta bildirimi gönder
+      try {
+        await sendDanismanRedNotification(secilenBasvuru, redSebebi);
+      } catch (emailError) {
+        console.error('Red e-posta bildirimi gönderilirken hata:', emailError);
+      }
+      
+      setSecilenBasvuru(null);
+      setRedSebebi('');
+      // Listeyi yenile
+      refreshLists();
+    } catch (error) {
+      console.error('Başvuru reddedilirken hata:', error);
+    }
+  };
+
+
 
   const handleBelgeIndir = async (dosya: string, dosyaAdi: string) => {
     try {
@@ -294,33 +275,60 @@ export function DanismanEkrani() {
 
   const handleBelgeOnayla = async (belgeId: string) => {
     try {
+      console.log('🔄 Belge onaylanıyor:', belgeId);
       const success = await belgeOnayla(belgeId, 'Danışman');
       if (success) {
+        console.log('✅ Belge başarıyla onaylandı:', belgeId);
         alert('Belge başarıyla onaylandı.');
-        // Başvuruyu yeniden yükle
+        
+        // State'i akıllı bir şekilde güncelle (unified sistem için)
+        const updateBelgeInBasvuru = (basvuru: EtkinlikBasvuru): EtkinlikBasvuru => {
+          return {
+            ...basvuru,
+            belgeler: basvuru.belgeler?.map(belge => 
+              belge.id === belgeId 
+                ? { 
+                    ...belge, 
+                    durum: 'Beklemede', // Danışman onayladı ama SKS onayı henüz yok
+                    danismanOnay: { 
+                      durum: 'Onaylandı', 
+                      tarih: new Date().toISOString() 
+                    } 
+                  }
+                : belge
+            ),
+            ekBelgeler: basvuru.ekBelgeler?.map(belge => 
+              belge.id === belgeId 
+                ? { 
+                    ...belge, 
+                    durum: 'Beklemede', // Danışman onayladı ama SKS onayı henüz yok
+                    danismanOnay: { 
+                      durum: 'Onaylandı', 
+                      tarih: new Date().toISOString() 
+                    } 
+                  }
+                : belge
+            )
+          };
+        };
+        
+        // Seçili başvuru varsa güncelle
         if (secilenBasvuru) {
-          const guncelBasvurular = await getBasvurular();
-          const guncelBasvuru = guncelBasvurular.find(b => b.id === secilenBasvuru.id);
-          if (guncelBasvuru) {
-            setSecilenBasvuru(guncelBasvuru);
-            
-            // Kaldırıldı: revize/yeni listelerinin güncellenmesi
-            
-            // Detay modale gösterilen başvuruyu da güncelle
-            if (detayBasvuru && detayBasvuru.id === guncelBasvuru.id) {
-              setDetayBasvuru(guncelBasvuru);
-            }
-          }
-        } else if (detayBasvuru) {
-          // Eğer seçili başvuru yoksa ama detay modalde bir başvuru gösteriliyorsa
-          const guncelBasvurular = await getBasvurular();
-          const guncelBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-          if (guncelBasvuru) {
-            setDetayBasvuru(guncelBasvuru);
-            
-            // Kaldırıldı: revize/yeni listelerinin güncellenmesi
-          }
+          setSecilenBasvuru(updateBelgeInBasvuru(secilenBasvuru));
         }
+        
+        // Detay modal varsa güncelle
+        if (detayBasvuru) {
+          setDetayBasvuru(updateBelgeInBasvuru(detayBasvuru));
+        }
+        
+        // Tüm başvurular listesini de güncelle
+        setTumBasvurular(prev => prev.map(basvuru => 
+          (basvuru.id === secilenBasvuru?.id || basvuru.id === detayBasvuru?.id) 
+            ? updateBelgeInBasvuru(basvuru)
+            : basvuru
+        ));
+        
       } else {
         alert('Belge onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
       }
@@ -337,36 +345,62 @@ export function DanismanEkrani() {
         return;
       }
       
+      console.log('🔄 Belge reddediliyor:', belgeId, 'Sebep:', redSebebi);
       const success = await belgeReddet(belgeId, 'Danışman', redSebebi);
       if (success) {
+        console.log('✅ Belge başarıyla reddedildi:', belgeId);
         alert('Belge başarıyla reddedildi. NOT: Reddedilen belgesi olan bir başvuruyu onaylayamazsınız. Başvuruyu reddetmek için "Reddet" butonunu kullanabilirsiniz.');
-        // Başvuruyu yeniden yükle
+        
+        // State'i akıllı bir şekilde güncelle (unified sistem için)
+        const updateBelgeInBasvuru = (basvuru: EtkinlikBasvuru): EtkinlikBasvuru => {
+          return {
+            ...basvuru,
+            belgeler: basvuru.belgeler?.map(belge => 
+              belge.id === belgeId 
+                ? { 
+                    ...belge, 
+                    durum: 'Reddedildi', // Danışman reddetti
+                    danismanOnay: { 
+                      durum: 'Reddedildi', 
+                      tarih: new Date().toISOString(),
+                      redSebebi: redSebebi 
+                    } 
+                  }
+                : belge
+            ),
+            ekBelgeler: basvuru.ekBelgeler?.map(belge => 
+              belge.id === belgeId 
+                ? { 
+                    ...belge, 
+                    durum: 'Reddedildi', // Danışman reddetti
+                    danismanOnay: { 
+                      durum: 'Reddedildi', 
+                      tarih: new Date().toISOString(),
+                      redSebebi: redSebebi 
+                    } 
+                  }
+                : belge
+            )
+          };
+        };
+        
+        // Seçili başvuru varsa güncelle
         if (secilenBasvuru) {
-          const guncelBasvurular = await getBasvurular();
-          const guncelBasvuru = guncelBasvurular.find(b => b.id === secilenBasvuru.id);
-          if (guncelBasvuru) {
-            setSecilenBasvuru(guncelBasvuru);
-            
-            // Kaldırıldı: revize/yeni listelerinin güncellenmesi
-            
-            // Detay başvuruyu da güncelle
-            if (detayBasvuru && detayBasvuru.id === guncelBasvuru.id) {
-              setDetayBasvuru(guncelBasvuru);
-            }
-            
-            // Artık başvuruyu otomatik reddetmiyoruz
-            // Kullanıcı kendisi red butonuna tıklayarak reddetmeli
-          }
-        } else if (detayBasvuru) {
-          // Detay modalde gösterilen bir başvuru varsa
-          const guncelBasvurular = await getBasvurular();
-          const guncelBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-          if (guncelBasvuru) {
-            setDetayBasvuru(guncelBasvuru);
-            
-            // Kaldırıldı: revize/yeni listelerinin güncellenmesi
-          }
+          setSecilenBasvuru(updateBelgeInBasvuru(secilenBasvuru));
         }
+        
+        // Detay modal varsa güncelle
+        if (detayBasvuru) {
+          setDetayBasvuru(updateBelgeInBasvuru(detayBasvuru));
+        }
+        
+        // Tüm başvurular listesini de güncelle
+        setTumBasvurular(prev => prev.map(basvuru => 
+          (basvuru.id === secilenBasvuru?.id || basvuru.id === detayBasvuru?.id) 
+            ? updateBelgeInBasvuru(basvuru)
+            : basvuru
+        ));
+        
       } else {
         alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
       }
@@ -477,9 +511,15 @@ export function DanismanEkrani() {
                     <button
                       key={item.etkinlikId}
                       onClick={async () => {
-                        const basvuru = tumBasvurular.find(b => b.id === item.etkinlikId) || etkinlikVeBelgelerOnayBekleyenler.find(b => b.id === item.etkinlikId);
+                        console.log(`Etkinlik tıklandı: ${item.etkinlikId}`);
+                        // Tüm başvuru listelerinden etkinliği bul
+                        const allBasvurular = await getBasvurular();
+                        const basvuru = allBasvurular.find(b => b.id === item.etkinlikId);
                         if (basvuru) {
+                          console.log(`Etkinlik bulundu: ${basvuru.etkinlikAdi}`);
                           setSecilenBasvuru(basvuru);
+                        } else {
+                          console.error(`Etkinlik bulunamadı: ${item.etkinlikId}`);
                         }
                       }}
                       className="w-full text-left p-3 rounded-lg border border-blue-200 hover:bg-blue-50"
@@ -523,48 +563,45 @@ export function DanismanEkrani() {
                   </div>
                 )}
 
-                {/* Reddedilmiş belge uyarısı */}
-                {secilenBasvuru.belgeler && secilenBasvuru.belgeler.some(belge => belge.danismanOnay?.durum === 'Reddedildi') && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-800">
-                    <strong>Dikkat:</strong> Bu başvuruda reddedilmiş belge(ler) bulunmaktadır. Etkinlik bilgilerini yine de onaylayabilirsiniz; belgeler revize edilmelidir.
+                                {/* Etkinlik Onay/Red Bölümü - Sadece bekleyen etkinlikler için */}
+                {!secilenBasvuru.danismanOnay && (
+                  <div className="space-y-4 pt-6 border-t">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Red Sebebi</label>
+                      <textarea
+                        value={redSebebi}
+                        onChange={(e) => setRedSebebi(e.target.value)}
+                        className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        rows={3}
+                        placeholder="Etkinliği reddetmek için sebep belirtiniz..."
+                      />
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <button
+                        onClick={handleOnay}
+                        className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors"
+                      >
+                        <CheckCircle className="w-5 h-5" />
+                        Etkinliği Onayla
+                      </button>
+                      <button
+                        onClick={handleRed}
+                        className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        <XCircle className="w-5 h-5" />
+                        Etkinliği Reddet
+                      </button>
+                    </div>
                   </div>
                 )}
-
-                {/* Onaylanmamış belge uyarısı */}
-                {secilenBasvuru.belgeler && secilenBasvuru.belgeler.some(belge => !belge.danismanOnay) && (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-yellow-800">
-                    <strong>Uyarı:</strong> Bu başvuruda henüz incelenmemiş belge(ler) bulunmaktadır. İsterseniz yalnızca etkinlik bilgilerini onaylayabilirsiniz.
-                  </div>
-                )}
-
-                <div className="space-y-4 pt-6 border-t">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Red Sebebi</label>
-                    <textarea
-                      value={redSebebi}
-                      onChange={(e) => setRedSebebi(e.target.value)}
-                      className="mt-1 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      rows={3}
-                      placeholder="Başvuruyu reddetmek için sebep belirtiniz..."
-                    />
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row gap-4">
-                    <button
-                      onClick={handleOnay}
-                      className={`flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors`}
-                    >
-                      <CheckCircle className="w-5 h-5" />
-                      Onayla
-                    </button>
-                    <button
-                      onClick={handleRed}
-                      className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
-                    >
-                      <XCircle className="w-5 h-5" />
-                      Reddet
-                    </button>
-                  </div>
+                  
+                {/* Belge Onay Bilgisi */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
+                  <p className="text-blue-800 text-sm">
+                    💡 <strong>Not:</strong> Etkinliği onayladıktan sonra belgeler ayrı ayrı onaylanabilir. 
+                    "Belgeler" sekmesinden her belgeyi tek tek inceleyin.
+                  </p>
                 </div>
               </div>
             ) : (
@@ -619,8 +656,8 @@ export function DanismanEkrani() {
                           {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 ? (
                             basvuru.zamanDilimleri.map((zaman, index) => (
                               <div key={index}>
-                                <div>Başlangıç: {new Date(zaman.baslangic).toLocaleString('tr-TR')}</div>
-                                <div>Bitiş: {new Date(zaman.bitis).toLocaleString('tr-TR')}</div>
+                                <div>Başlangıç: {zaman.baslangic ? new Date(zaman.baslangic).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
+                                <div>Bitiş: {zaman.bitis ? new Date(zaman.bitis).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
                                 {basvuru.zamanDilimleri!.length > 1 && index < basvuru.zamanDilimleri!.length - 1 && <hr className="my-1" />}
                               </div>
                             ))
@@ -635,6 +672,25 @@ export function DanismanEkrani() {
                           Onay Tarihi: {basvuru.danismanOnay && new Date(basvuru.danismanOnay.tarih).toLocaleString('tr-TR')}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-2">
+                          {/* Etkinlik Durum Badge'i (Aşamalı Sistem) */}
+                          {basvuru.danismanOnay?.durum === 'Onaylandı' && basvuru.sksOnay?.durum === 'Onaylandı' ? (
+                            <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                              ✅ Tam Onaylandı
+                            </span>
+                          ) : basvuru.danismanOnay?.durum === 'Onaylandı' && !basvuru.sksOnay ? (
+                            <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                              👨‍🏫 Danışman Onaylandı
+                            </span>
+                          ) : basvuru.sksOnay?.durum === 'Onaylandı' && !basvuru.danismanOnay ? (
+                            <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                              🏛️ SKS Onaylandı
+                            </span>
+                          ) : (
+                            <span className="bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                              ⏳ Beklemede
+                            </span>
+                          )}
+                          
                           <span className="bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded">
                             Revize Edilmiş Başvuru
                           </span>
@@ -680,8 +736,8 @@ export function DanismanEkrani() {
                           {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 ? (
                             basvuru.zamanDilimleri.map((zaman, index) => (
                               <div key={index}>
-                                <div>Başlangıç: {new Date(zaman.baslangic).toLocaleString('tr-TR')}</div>
-                                <div>Bitiş: {new Date(zaman.bitis).toLocaleString('tr-TR')}</div>
+                                <div>Başlangıç: {zaman.baslangic ? new Date(zaman.baslangic).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
+                                <div>Bitiş: {zaman.bitis ? new Date(zaman.bitis).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
                                 {basvuru.zamanDilimleri!.length > 1 && index < basvuru.zamanDilimleri!.length - 1 && <hr className="my-1" />}
                               </div>
                             ))

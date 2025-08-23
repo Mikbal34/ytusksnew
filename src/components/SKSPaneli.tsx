@@ -28,6 +28,7 @@ export const SKSPaneli: React.FC = () => {
   const [redSebebi, setRedSebebi] = useState('');
   const [basvurular, setBasvurular] = useState<EtkinlikBasvuru[]>([]);
   const [onaylananEtkinlikler, setOnaylananEtkinlikler] = useState<EtkinlikBasvuru[]>([]);
+  const [etkinlikOnayliBelgeBekleyenler, setEtkinlikOnayliBelgeBekleyenler] = useState<EtkinlikBasvuru[]>([]);
   const [kulupler, setKulupler] = useState<Kulup[]>([]);
   const [showKulupDetay, setShowKulupDetay] = useState<Kulup | null>(null);
   const [showEtkinlikler, setShowEtkinlikler] = useState(false);
@@ -99,18 +100,49 @@ export const SKSPaneli: React.FC = () => {
           console.log('Onaylanmamış ek belgesi olan etkinlikler:', onaylanmamisEkBelgesiOlanlar.length);
           setBekleyenEkBelgeSayisi(onaylanmamisEkBelgesiOlanlar.length);
           
-          // SKS onayı bekleyen başvurular (danışman onaylı ama SKS onaysız)
-          const bekleyenBasvurular = allBasvurular.filter(b => 
-            b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
-          );
-          console.log('Bekleyen başvurular:', bekleyenBasvurular);
-          setBasvurular(bekleyenBasvurular);
+          // 1️⃣ ONAY BEKLEYEN ETKİNLİKLER (Danışman onaylı, SKS etkinlik onayı yok)
+          const bekleyenEtkinlikler = allBasvurular.filter(b => {
+            const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
+            const sksEtkinlikOnayYok = !b.sksOnay;
+            
+            const sonuc = danismanOnayli && sksEtkinlikOnayYok;
+            if (sonuc) {
+              console.log(`📋 SKS onay bekleyen etkinlik: ${b.etkinlikAdi}`);
+            }
+            return sonuc;
+          });
+          console.log(`🎯 SKS ${bekleyenEtkinlikler.length} onay bekleyen etkinlik bulundu`);
+          setBasvurular(bekleyenEtkinlikler);
           
-          // SKS onaylı başvurular
-          const onaylananlar = allBasvurular.filter(b => 
-            b.danismanOnay?.durum === 'Onaylandı' && b.sksOnay?.durum === 'Onaylandı'
-          );
-          console.log('Onaylanan etkinlikler:', onaylananlar);
+          // 2️⃣ ETKİNLİK ONAYLI, BELGELER BEKLİYOR (SKS etkinlik onaylı ama belgeler bekliyor)
+          const etkinlikOnayliBelgeBekleyen = allBasvurular.filter(b => {
+            const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
+            const sksEtkinlikOnayli = b.sksOnay?.durum === 'Onaylandı';
+            const bekleyenBelgeler = (b.belgeler || []).some(doc => 
+              doc.danismanOnay?.durum === 'Onaylandı' && !doc.sksOnay
+            ) || (b.ekBelgeler || []).some(ek => 
+              ek.danismanOnay?.durum === 'Onaylandı' && !ek.sksOnay
+            );
+            
+            const sonuc = danismanOnayli && sksEtkinlikOnayli && bekleyenBelgeler;
+            if (sonuc) {
+              console.log(`📋 SKS etkinlik onaylı belgeler bekliyor: ${b.etkinlikAdi}`);
+            }
+            return sonuc;
+          });
+          console.log(`✅ SKS ${etkinlikOnayliBelgeBekleyen.length} etkinlik onaylı belge bekleyen bulundu`);
+          setEtkinlikOnayliBelgeBekleyenler(etkinlikOnayliBelgeBekleyen);
+          
+          // 3️⃣ TAMAMLANMIŞ ETKİNLİKLER (Her şey onaylı)
+          const onaylananlar = allBasvurular.filter(b => {
+            const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
+            const sksEtkinlikOnayli = b.sksOnay?.durum === 'Onaylandı';
+            const tumAnaBelgelerOnayli = (b.belgeler || []).every(doc => doc.sksOnay?.durum === 'Onaylandı');
+            const tumEkBelgelerOnayli = (b.ekBelgeler || []).every(ek => ek.sksOnay?.durum === 'Onaylandı');
+            
+            return danismanOnayli && sksEtkinlikOnayli && tumAnaBelgelerOnayli && tumEkBelgelerOnayli;
+          });
+          console.log('Tamamlanmış etkinlikler:', onaylananlar);
           setOnaylananEtkinlikler(onaylananlar);
           
           // SKS tarafından incelenmiş tüm başvurular
@@ -156,10 +188,7 @@ export const SKSPaneli: React.FC = () => {
     return mainPending || extraPending;
   };
 
-  // Etkinlik SKS onaylı, belgeler SKS onayı bekliyor
-  const etkinlikOnayliBelgelerBekleyen = tumBasvurular.filter(b => 
-    b.sksOnay?.durum === 'Onaylandı' && hasAnyDocSksNotApproved(b)
-  );
+  // etkinlikOnayliBelgeBekleyenler state'ini kullanıyoruz artık
 
   const handleBelgeIndir = async (dosya: string, dosyaAdi: string) => {
     try {
@@ -381,47 +410,21 @@ export const SKSPaneli: React.FC = () => {
   // Not used in this view
   // const getBelgeDurumBilgisi = (belge: ExtendedEkBelge) => { /* ... */ };
 
-  // Başvuru onaylama işlemi
   const handleOnay = async (basvuru: EtkinlikBasvuru) => {
     try {
-      console.log('Başvuru onaylanıyor:', basvuru.id);
+      console.log('Etkinlik onaylanıyor:', basvuru.id);
       
-      // Belgeler ve ek belgeler için durumlar
-      const hasRejectedMainDocs = !!(basvuru.belgeler && basvuru.belgeler.some(b => b.sksOnay?.durum === 'Reddedildi'));
-      const hasRejectedAdditionalDocs = !!(basvuru.ekBelgeler && basvuru.ekBelgeler.some(b => b.sksOnay?.durum === 'Reddedildi'));
-      const hasUnreviewedMainDocs = !!(basvuru.belgeler && basvuru.belgeler.some(b => !b.sksOnay));
-      const hasUnreviewedAdditionalDocs = !!(basvuru.ekBelgeler && basvuru.ekBelgeler.some(b => !b.sksOnay));
-
-      // Uyarı/Onay akışı: Reddedilmiş veya incelenmemiş belge varsa yine de onaylama imkanı ver
-      if (hasRejectedMainDocs || hasRejectedAdditionalDocs || hasUnreviewedMainDocs || hasUnreviewedAdditionalDocs) {
-        const reasons: string[] = [];
-        if (hasRejectedMainDocs) reasons.push('reddedilmiş ana belge var');
-        if (hasRejectedAdditionalDocs) reasons.push('reddedilmiş ek belge var');
-        if (hasUnreviewedMainDocs) reasons.push('incelenmemiş ana belge var');
-        if (hasUnreviewedAdditionalDocs) reasons.push('incelenmemiş ek belge var');
-        const msg = `Dikkat: Bu başvuru için ${reasons.join(', ')}. Etkinliği yine de onaylıyor musunuz?`;
-        const confirmed = window.confirm(msg);
-        if (!confirmed) return;
-      }
-      
-      // Durum kontrolü - eğer danışman zaten onaylamışsa durum "Onaylandı" olmalı
-      let durum = basvuru.durum;
-      if (basvuru.danismanOnay?.durum === 'Onaylandı') {
-        durum = 'Onaylandı';
-        console.log('Danışman zaten onaylamış, durum "Onaylandı" olarak güncelleniyor');
-      }
-      
+      // JSONB sisteminde durum kolonu yok - direkt onay bilgilerini güncelle
       const guncelBasvuru: EtkinlikBasvuru = {
         ...basvuru,
         sksOnay: {
           durum: 'Onaylandı',
           tarih: new Date().toISOString()
-        },
-        durum: durum
+        }
       };
       
       await updateBasvuru(guncelBasvuru);
-      console.log('Başvuru başarıyla onaylandı');
+      console.log('Etkinlik başarıyla onaylandı');
       
       // Email bildirimini gönder
       try {
@@ -429,19 +432,35 @@ export const SKSPaneli: React.FC = () => {
         console.log('SKS onay bildirimi gönderildi');
       } catch (emailError) {
         console.error('Onay e-posta bildirimi gönderilirken hata:', emailError);
-        // E-posta gönderiminde hata olsa bile işleme devam et
       }
       
-      setBasvurular(basvurular.filter(b => b.id !== basvuru.id));
-      setOnaylananEtkinlikler([...onaylananEtkinlikler, guncelBasvuru]);
-      setTumBasvurular([...tumBasvurular, guncelBasvuru]);
+      // Listeyi güncelle
+      const guncelBasvurular = await getBasvurular();
+      if (Array.isArray(guncelBasvurular)) {
+        // Filtreleri yeniden uygula
+        const bekleyenEtkinlikler = guncelBasvurular.filter(b => {
+          const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
+          const sksEtkinlikOnayYok = !b.sksOnay;
+          return danismanOnayli && sksEtkinlikOnayYok;
+        });
+        setBasvurular(bekleyenEtkinlikler);
+        
+        const onaylananlar = guncelBasvurular.filter(b => {
+          const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
+          const sksEtkinlikOnayli = b.sksOnay?.durum === 'Onaylandı';
+          const tumAnaBelgelerOnayli = (b.belgeler || []).every(doc => doc.sksOnay?.durum === 'Onaylandı');
+          const tumEkBelgelerOnayli = (b.ekBelgeler || []).every(ek => ek.sksOnay?.durum === 'Onaylandı');
+          return danismanOnayli && sksEtkinlikOnayli && tumAnaBelgelerOnayli && tumEkBelgelerOnayli;
+        });
+        setOnaylananEtkinlikler(onaylananlar);
+        setTumBasvurular(guncelBasvurular.filter(b => b.sksOnay));
+      }
     } catch (error) {
-      console.error('Başvuru onaylanırken hata oluştu:', error);
-      alert('Başvuru onaylanırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
+      console.error('Etkinlik onaylanırken hata oluştu:', error);
+      alert('Etkinlik onaylanırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
     }
   };
 
-  // Başvuru reddetme işlemi
   const handleRed = async () => {
     if (!redSebebi.trim() || !secilenBasvuru) {
       alert('Lütfen red sebebini belirtiniz!');
@@ -449,19 +468,18 @@ export const SKSPaneli: React.FC = () => {
     }
     
     try {
-      console.log('Başvuru reddediliyor:', secilenBasvuru.id);
+      console.log('Etkinlik reddediliyor:', secilenBasvuru.id);
       const guncelBasvuru: EtkinlikBasvuru = {
         ...secilenBasvuru,
         sksOnay: {
           durum: 'Reddedildi',
           tarih: new Date().toISOString(),
           redSebebi
-        },
-        durum: 'Reddedildi'
+        }
       };
       
       await updateBasvuru(guncelBasvuru);
-      console.log('Başvuru başarıyla reddedildi');
+      console.log('Etkinlik başarıyla reddedildi');
       
       // Email bildirimini gönder
       try {
@@ -469,16 +487,25 @@ export const SKSPaneli: React.FC = () => {
         console.log('SKS red bildirimi gönderildi');
       } catch (emailError) {
         console.error('Red e-posta bildirimi gönderilirken hata:', emailError);
-        // E-posta gönderiminde hata olsa bile işleme devam et
       }
       
-      setBasvurular(basvurular.filter(b => b.id !== secilenBasvuru.id));
       setSecilenBasvuru(null);
       setRedSebebi('');
-      setTumBasvurular([...tumBasvurular, guncelBasvuru]);
+      
+      // Listeyi güncelle
+      const guncelBasvurular = await getBasvurular();
+      if (Array.isArray(guncelBasvurular)) {
+        const bekleyenEtkinlikler = guncelBasvurular.filter(b => {
+          const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
+          const sksEtkinlikOnayYok = !b.sksOnay;
+          return danismanOnayli && sksEtkinlikOnayYok;
+        });
+        setBasvurular(bekleyenEtkinlikler);
+        setTumBasvurular(guncelBasvurular.filter(b => b.sksOnay));
+      }
     } catch (error) {
-      console.error('Başvuru reddedilirken hata oluştu:', error);
-      alert('Başvuru reddedilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
+      console.error('Etkinlik reddedilirken hata oluştu:', error);
+      alert('Etkinlik reddedilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
     }
   };
 
@@ -684,34 +711,28 @@ export const SKSPaneli: React.FC = () => {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            // Onaylanmamış veya reddedilmiş belge olabilir; handleOnay içinde kapsamlı confirm var
-                            handleOnay(basvuru);
-                          }}
-                          className={`flex items-center gap-2 ${
-                            isApproveButtonActive
-                              ? 'bg-emerald-600 hover:bg-emerald-700' 
-                              : 'bg-gray-400 cursor-not-allowed'
-                          } text-white px-3 py-1.5 rounded-lg transition-colors`}
+                          onClick={() => setDetayBasvuru(basvuru)}
+                          className="flex items-center gap-2 bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                          <Eye className="w-4 h-4" />
+                          Detaylar
+                        </button>
+                        {/* SKS Etkinlik Onay Butonları */}
+                        <button
+                          onClick={() => handleOnay(basvuru)}
+                          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg transition-colors"
                         >
                           <CheckCircle className="w-4 h-4" />
-                          Onayla
+                          Etkinliği Onayla
                         </button>
                         <button 
                           onClick={() => setSecilenBasvuru(basvuru)}
                           className="flex items-center gap-2 bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
                         >
                           <XCircle className="w-4 h-4" />
-                          Reddet
-                        </button>
-                        <button
-                          onClick={() => setDetayBasvuru(basvuru)}
-                          className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700"
-                        >
-                          <Eye className="w-4 h-4" />
-                          Detaylar
+                          Etkinliği Reddet
                         </button>
                       </div>
                     </div>
@@ -731,10 +752,10 @@ export const SKSPaneli: React.FC = () => {
                 Etkinlik Onaylı, Belgeler Onay Bekliyor
               </h2>
               <div className="space-y-4">
-                {etkinlikOnayliBelgelerBekleyen.length === 0 && (
+                {etkinlikOnayliBelgeBekleyenler.length === 0 && (
                   <div className="text-center py-8 text-gray-500">Bu ölçüte uyan başvuru bulunmuyor.</div>
                 )}
-                {etkinlikOnayliBelgelerBekleyen.map((basvuru) => (
+                {etkinlikOnayliBelgeBekleyenler.map((basvuru) => (
                   <div key={basvuru.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -743,8 +764,12 @@ export const SKSPaneli: React.FC = () => {
                       </div>
                       <p className="text-sm text-gray-600 mt-1">{basvuru.kulupAdi}</p>
                       <div className="text-sm text-gray-600 mt-1">
-                        <div>Başlangıç: {new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR')}</div>
-                        <div>Bitiş: {new Date(basvuru.bitisTarihi).toLocaleString('tr-TR')}</div>
+                        {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 && (
+                          <>
+                            <div>Başlangıç: {new Date(basvuru.zamanDilimleri[0].baslangic).toLocaleString('tr-TR')}</div>
+                            <div>Bitiş: {new Date(basvuru.zamanDilimleri[0].bitis).toLocaleString('tr-TR')}</div>
+                          </>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -808,14 +833,15 @@ export const SKSPaneli: React.FC = () => {
           </div>
         </div>
 
+        {/* Etkinlik Red Modal */}
         {secilenBasvuru && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Red Sebebi</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Etkinlik Red Sebebi</h3>
               <textarea
                 value={redSebebi}
                 onChange={(e) => setRedSebebi(e.target.value)}
-                placeholder="Red sebebini giriniz..."
+                placeholder="Etkinliği reddetme sebebini giriniz..."
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-4"
                 rows={4}
               />
@@ -833,7 +859,7 @@ export const SKSPaneli: React.FC = () => {
                   onClick={handleRed}
                   className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
-                  Reddet
+                  Etkinliği Reddet
                 </button>
               </div>
             </div>
@@ -1151,6 +1177,50 @@ export const SKSPaneli: React.FC = () => {
               />
             </div>
           </div>
+        )}
+
+        {/* Başvuru Detay Modal */}
+        {detayBasvuru && (
+          <BasvuruDetay
+            basvuru={detayBasvuru}
+            userRole="sks"
+            showBelgeler={true}
+            onClose={() => setDetayBasvuru(null)}
+            onBelgeOnayla={async (belgeId) => {
+              const success = await belgeOnayla(belgeId, 'SKS');
+              if (success) {
+                // Başvuruları yeniden yükle
+                const guncelBasvurular = await getBasvurular();
+                const bekleyenBasvurular = guncelBasvurular.filter(b => 
+                  b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
+                );
+                setBasvurular(bekleyenBasvurular);
+                
+                // Detay gösterilen başvuruyu güncelle
+                const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
+                if (guncelDetayBasvuru) {
+                  setDetayBasvuru(guncelDetayBasvuru);
+                }
+              }
+            }}
+            onBelgeReddet={async (belgeId, redSebebi) => {
+              const success = await belgeReddet(belgeId, 'SKS', redSebebi);
+              if (success) {
+                // Başvuruları yeniden yükle
+                const guncelBasvurular = await getBasvurular();
+                const bekleyenBasvurular = guncelBasvurular.filter(b => 
+                  b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
+                );
+                setBasvurular(bekleyenBasvurular);
+                
+                // Detay gösterilen başvuruyu güncelle
+                const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
+                if (guncelDetayBasvuru) {
+                  setDetayBasvuru(guncelDetayBasvuru);
+                }
+              }
+            }}
+          />
         )}
       </div>
     </div>

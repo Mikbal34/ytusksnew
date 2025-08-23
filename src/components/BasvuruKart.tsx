@@ -139,47 +139,52 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
 
       {showStatusBadges && !showDetailedStatuses && (
         <div className="flex flex-wrap gap-2 mb-3">
-          {/* Danışman durumu */}
-          {basvuru.danismanOnay?.durum === 'Onaylandı' ? (
-            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-green-100 text-green-800">Danışman: Onaylandı</span>
-          ) : basvuru.danismanOnay?.durum === 'Reddedildi' ? (
-            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-red-100 text-red-800">Danışman: Reddedildi</span>
+          {/* Etkinlik Durum Badge (Unified Sistem) */}
+          {basvuru.durum === 'Onaylandı' ? (
+            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-green-100 text-green-800">✅ Tam Onaylandı</span>
+          ) : basvuru.durum === 'Danışman Onaylandı' ? (
+            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">👨‍🏫 Danışman Onaylandı</span>
+          ) : basvuru.durum === 'SKS Onaylandı' ? (
+            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-purple-100 text-purple-800">🏛️ SKS Onaylandı</span>
+          ) : basvuru.durum === 'Reddedildi' ? (
+            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-red-100 text-red-800">❌ Reddedildi</span>
           ) : (
-            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800">Danışman: Onay Bekliyor</span>
-          )}
-          {/* SKS durumu */}
-          {basvuru.sksOnay?.durum === 'Onaylandı' ? (
-            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-green-100 text-green-800">SKS: Onaylandı</span>
-          ) : basvuru.sksOnay?.durum === 'Reddedildi' ? (
-            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-red-100 text-red-800">SKS: Reddedildi</span>
-          ) : (
-            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800">SKS: Onay Bekliyor</span>
+            <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800">⏳ Beklemede</span>
           )}
         </div>
       )}
 
       {showDetailedStatuses && (
         <div className="space-y-2 mb-3">
-          {/* Etkinlik Bilgisi Durumları */}
+          {/* Etkinlik Onay Durumları - İki Ayrı Kutucuk */}
           <div>
-            <div className="text-xs font-semibold text-gray-700 mb-1">Etkinlik Bilgisi</div>
+            <div className="text-xs font-semibold text-gray-700 mb-1">Etkinlik Onayları</div>
             <div className="flex flex-wrap gap-2">
-              {/* Danışman */}
-              {basvuru.danismanOnay?.durum === 'Onaylandı' ? (
-                <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800">Danışman: Onaylandı</span>
-              ) : basvuru.danismanOnay?.durum === 'Reddedildi' ? (
-                <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-red-100 text-red-800">Danışman: Reddedildi</span>
-              ) : (
-                <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">Danışman: Onay Bekliyor</span>
-              )}
-              {/* SKS */}
-              {basvuru.sksOnay?.durum === 'Onaylandı' ? (
-                <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800">SKS: Onaylandı</span>
-              ) : basvuru.sksOnay?.durum === 'Reddedildi' ? (
-                <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-red-100 text-red-800">SKS: Reddedildi</span>
-              ) : (
-                <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">SKS: Onay Bekliyor</span>
-              )}
+              {/* Danışman Onay Durumu */}
+              {(() => {
+                const danismanOnay = basvuru.danismanOnay;
+                if (!danismanOnay) {
+                  return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">👨‍🏫 Danışman: Beklemede</span>;
+                } else if (danismanOnay.durum === 'Onaylandı') {
+                  return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800">👨‍🏫 Danışman: Onaylandı</span>;
+                } else if (danismanOnay.durum === 'Reddedildi') {
+                  return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-red-100 text-red-800" title={danismanOnay.redSebebi || ''}>👨‍🏫 Danışman: Reddedildi</span>;
+                }
+                return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">👨‍🏫 Danışman: Beklemede</span>;
+              })()}
+              
+              {/* SKS Onay Durumu */}
+              {(() => {
+                const sksOnay = basvuru.sksOnay;
+                if (!sksOnay) {
+                  return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">🏛️ SKS: Beklemede</span>;
+                } else if (sksOnay.durum === 'Onaylandı') {
+                  return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800">🏛️ SKS: Onaylandı</span>;
+                } else if (sksOnay.durum === 'Reddedildi') {
+                  return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-red-100 text-red-800" title={sksOnay.redSebebi || ''}>🏛️ SKS: Reddedildi</span>;
+                }
+                return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-yellow-100 text-yellow-800">🏛️ SKS: Beklemede</span>;
+              })()}
             </div>
           </div>
           {/* Belgeler Durumları */}

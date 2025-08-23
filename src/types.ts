@@ -24,7 +24,7 @@ export interface EtkinlikBelge {
   dosyaAdi: string;
   danismanOnay?: OnayDurumu;
   sksOnay?: OnayDurumu;
-  durum: 'Beklemede' | 'Onaylandı' | 'Reddedildi';
+  durum?: 'Beklemede' | 'Onaylandı' | 'Reddedildi'; // Backward compatibility
 }
 
 export interface EkBelge {
@@ -37,7 +37,7 @@ export interface EkBelge {
   danismanOnay?: OnayDurumu;
   sksOnay?: OnayDurumu;
   aciklama?: string;
-  durum: 'Beklemede' | 'Onaylandı' | 'Reddedildi';
+  durum?: 'Beklemede' | 'Onaylandı' | 'Reddedildi'; // Backward compatibility
 }
 
 export interface EtkinlikBasvuru {
@@ -73,12 +73,12 @@ export interface EtkinlikBasvuru {
   aciklama: string;
   belgeler?: EtkinlikBelge[];
   ekBelgeler?: EkBelge[];
-  durum: 'Beklemede' | 'Onaylandı' | 'Reddedildi';
   revizyon: boolean;
   orijinalBasvuruId?: string;
   danismanOnay?: OnayDurumu;
   sksOnay?: OnayDurumu;
-  onayGecmisi: {
+  durum?: 'Beklemede' | 'Onaylandı' | 'Reddedildi'; // Backward compatibility
+  onayGecmisi?: {
     danismanOnaylari: OnayDurumu[];
     sksOnaylari: OnayDurumu[];
   };

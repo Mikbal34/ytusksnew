@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { EtkinlikBasvuru } from '../types';
-import { OnayGecmisi } from './OnayGecmisi';
+
 import { FileDown, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
 import { EkBelgeYonetimi } from './EkBelgeYonetimi';
 
@@ -14,6 +14,9 @@ interface BasvuruDetayProps {
   userRole?: 'admin' | 'sks' | 'danisman' | 'kulup_baskani';
   onEkBelgeGuncellendi?: () => void;
   showEkBelgeler?: boolean;
+  onClose?: () => void;
+  onApprove?: (basvuru: EtkinlikBasvuru) => void;
+  onReject?: (basvuru: EtkinlikBasvuru) => void;
 }
 
 export function BasvuruDetay({ 
@@ -25,7 +28,10 @@ export function BasvuruDetay({
   onBelgeReddet,
   userRole,
   onEkBelgeGuncellendi,
-  showEkBelgeler = false
+  showEkBelgeler = false,
+  onClose,
+  onApprove,
+  onReject
 }: BasvuruDetayProps) {
   const [redSebebi, setRedSebebi] = useState<string>('');
   const [activeRedBelgeId, setActiveRedBelgeId] = useState<string | null>(null);
@@ -34,69 +40,83 @@ export function BasvuruDetay({
     return null;
   }
 
-  // Belge onay göstergesi ve onay/red butonları
-  const renderOnayDurumu = (belgeId: string, danismanOnay: any, sksOnay: any) => {
+  // Belge onay göstergesi ve onay/red butonları (JSONB Sistem)
+  const renderOnayDurumu = (belgeId: string, belge?: any) => {
     // Kullanıcı rolüne göre onay durumunu ve butonları göster
     const isUserDanisman = userRole === 'danisman';
     const isUserSKS = userRole === 'sks';
     
-    // Hangi onay durumunu kontrol edeceğiz?
-    const onayDurumu = isUserDanisman ? danismanOnay : (isUserSKS ? sksOnay : null);
-    // const otherOnayDurumu = isUserDanisman ? sksOnay : (isUserSKS ? danismanOnay : null);
+    // JSONB sistemde danismanOnay ve sksOnay kullanıyoruz
+    const danismanOnay = belge?.danismanOnay;
+    const sksOnay = belge?.sksOnay;
     
     // Kullanıcı onay/red butonlarını görebilmeli mi?
     const canApprove = (isUserDanisman || isUserSKS) && onBelgeOnayla && onBelgeReddet;
     
-    // Belge zaten onaylanmış veya reddedilmiş mi?
-    const isApproved = onayDurumu?.durum === 'Onaylandı';
-    const isRejected = onayDurumu?.durum === 'Reddedildi';
+    // Belge durumuna göre kontrol (JSONB sistem)
+    const isDanismanApproved = danismanOnay?.durum === 'Onaylandı';
+    const isDanismanRejected = danismanOnay?.durum === 'Reddedildi';
+    const isSksApproved = sksOnay?.durum === 'Onaylandı';
+    const isSksRejected = sksOnay?.durum === 'Reddedildi';
+    
+    const isFullyApproved = isDanismanApproved && isSksApproved;
+    const isRejected = isDanismanRejected || isSksRejected;
+    
+    // Kullanıcının bu belge için aksiyon alıp alamayacağını belirle
+    const canUserTakeAction = () => {
+      if (isRejected || isFullyApproved) return false; // Final durumlar
+      
+      if (isUserDanisman) {
+        // Danışman: Henüz danışman onayı yoksa aksiyon alabilir
+        return !danismanOnay;
+      }
+      
+      if (isUserSKS) {
+        // SKS: Henüz SKS onayı yoksa aksiyon alabilir
+        return !sksOnay;
+      }
+      
+      return false;
+    };
     
     // Aktif red işlemi var mı?
     const isActiveRejection = activeRedBelgeId === belgeId;
     
     return (
       <div className="flex space-x-3 items-center">
-        {/* Danışman ve SKS onay durumları her zaman görünür */}
-        <div className="flex space-x-2">
-          <div className="flex items-center">
-            <span className="text-xs mr-1">Danışman:</span>
-            {danismanOnay ? (
-              danismanOnay.durum === 'Onaylandı' ? (
-                <CheckCircle className="w-4 h-4 text-green-500" />
-              ) : (
-                <span title={danismanOnay.redSebebi || 'Reddedildi'} className="flex items-center gap-1">
-                  <XCircle className="w-4 h-4 text-red-500" />
-                  {isUserDanisman && danismanOnay.redSebebi && (
-                    <span className="text-[11px] text-red-600">Red: {danismanOnay.redSebebi}</span>
-                  )}
-                </span>
-              )
-            ) : (
-              <AlertCircle className="w-4 h-4 text-gray-400" />
-            )}
-          </div>
-          
-          <div className="flex items-center">
-            <span className="text-xs mr-1">SKS:</span>
-            {sksOnay ? (
-              sksOnay.durum === 'Onaylandı' ? (
-                <CheckCircle className="w-4 h-4 text-green-500" />
-              ) : (
-                <span title={sksOnay.redSebebi || 'Reddedildi'} className="flex items-center gap-1">
-                  <XCircle className="w-4 h-4 text-red-500" />
-                  {isUserSKS && sksOnay.redSebebi && (
-                    <span className="text-[11px] text-red-600">Red: {sksOnay.redSebebi}</span>
-                  )}
-                </span>
-              )
-            ) : (
-              <AlertCircle className="w-4 h-4 text-gray-400" />
-            )}
-          </div>
+        {/* JSONB sistem - belge durumu göstergesi */}
+        <div className="flex items-center">
+          <span className="text-xs mr-2">Durum:</span>
+          {isFullyApproved ? (
+            <div className="flex items-center text-green-600 bg-green-50 px-2 py-1 rounded text-xs">
+              <CheckCircle className="w-4 h-4 mr-1" />
+              Onaylandı
+            </div>
+          ) : isRejected ? (
+            <div className="flex items-center text-red-600 bg-red-50 px-2 py-1 rounded text-xs">
+              <XCircle className="w-4 h-4 mr-1" />
+              Reddedildi
+            </div>
+          ) : isDanismanApproved && !isSksApproved ? (
+            <div className="flex items-center text-blue-600 bg-blue-50 px-2 py-1 rounded text-xs">
+              <CheckCircle className="w-4 h-4 mr-1" />
+              👨‍🏫 Danışman Onaylandı
+            </div>
+          ) : isSksApproved && !isDanismanApproved ? (
+            <div className="flex items-center text-purple-600 bg-purple-50 px-2 py-1 rounded text-xs">
+              <CheckCircle className="w-4 h-4 mr-1" />
+              🏛️ SKS Onaylandı
+            </div>
+          ) : (
+            <div className="flex items-center text-yellow-600 bg-yellow-50 px-2 py-1 rounded text-xs">
+              <AlertCircle className="w-4 h-4 mr-1" />
+              Beklemede
+            </div>
+          )}
         </div>
         
-        {/* Sadece danisman veya sks onaylama/reddetme yapabilir */}
-        {canApprove && !isApproved && !isRejected && !isActiveRejection && (
+        {/* Sadece danisman veya sks onaylama/reddetme yapabilir (Aşamalı Sistem) */}
+        {canApprove && canUserTakeAction() && !isActiveRejection && (
           <div className="flex space-x-2">
             <button
               onClick={() => {
@@ -119,8 +139,8 @@ export function BasvuruDetay({
           </div>
         )}
         
-        {/* Red sebebi giriş alanı */}
-        {canApprove && isActiveRejection && (
+        {/* Red sebebi giriş alanı (Aşamalı Sistem) */}
+        {canApprove && canUserTakeAction() && isActiveRejection && (
           <div className="flex flex-col space-y-2">
             <textarea
               value={redSebebi}
@@ -208,11 +228,11 @@ export function BasvuruDetay({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Başlangıç Tarihi</label>
-            <div className="mt-1 text-gray-900">{new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR')}</div>
+            <div className="mt-1 text-gray-900">{basvuru.baslangicTarihi ? new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700">Bitiş Tarihi</label>
-            <div className="mt-1 text-gray-900">{new Date(basvuru.bitisTarihi).toLocaleString('tr-TR')}</div>
+            <div className="mt-1 text-gray-900">{basvuru.bitisTarihi ? new Date(basvuru.bitisTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
           </div>
         </div>
 
@@ -257,7 +277,10 @@ export function BasvuruDetay({
             <label className="block text-sm font-medium text-gray-700 mb-2">Yüklenen Belgeler</label>
             <div className="space-y-2">
               {(userRole === 'sks' 
-                ? basvuru.belgeler.filter(b => b.danismanOnay?.durum === 'Onaylandı')
+                ? basvuru.belgeler.filter(b => 
+                    // SKS: Sadece danışman onaylamış belgeleri veya henüz hiç onaylanmamış belgeleri göster
+                    !b.danismanOnay || b.danismanOnay.durum === 'Onaylandı'
+                  ) 
                 : basvuru.belgeler
               ).map((belge, index) => (
                 <div 
@@ -270,7 +293,7 @@ export function BasvuruDetay({
                   </div>
                   
                   <div className="flex items-center space-x-3">
-                    {renderOnayDurumu(belge.id!, belge.danismanOnay, belge.sksOnay)}
+                    {renderOnayDurumu(belge.id!, belge)}
                     
                     <button
                       onClick={() => onBelgeIndir?.(typeof belge.dosya === 'string' ? belge.dosya : '', belge.dosyaAdi)}
@@ -285,12 +308,34 @@ export function BasvuruDetay({
           </div>
         )}
 
-        {showHistory && basvuru.onayGecmisi && (
+        {showHistory && (
           <div className="mt-6 pt-6 border-t">
-            <OnayGecmisi 
-              danismanOnaylari={basvuru.onayGecmisi.danismanOnaylari}
-              sksOnaylari={basvuru.onayGecmisi.sksOnaylari}
-            />
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="font-medium text-gray-700 mb-2">Onay Geçmişi</h4>
+              <div className="space-y-2 text-sm text-gray-600">
+                {basvuru.danismanOnay && (
+                  <div>
+                    <strong>Danışman:</strong> {basvuru.danismanOnay.durum} 
+                    {basvuru.danismanOnay.tarih && ` (${new Date(basvuru.danismanOnay.tarih).toLocaleString('tr-TR')})`}
+                    {basvuru.danismanOnay.redSebebi && (
+                      <div className="text-red-600 ml-4">Red Sebebi: {basvuru.danismanOnay.redSebebi}</div>
+                    )}
+                  </div>
+                )}
+                {basvuru.sksOnay && (
+                  <div>
+                    <strong>SKS:</strong> {basvuru.sksOnay.durum}
+                    {basvuru.sksOnay.tarih && ` (${new Date(basvuru.sksOnay.tarih).toLocaleString('tr-TR')})`}
+                    {basvuru.sksOnay.redSebebi && (
+                      <div className="text-red-600 ml-4">Red Sebebi: {basvuru.sksOnay.redSebebi}</div>
+                    )}
+                  </div>
+                )}
+                {!basvuru.danismanOnay && !basvuru.sksOnay && (
+                  <div>Henüz onay/red işlemi yapılmamış</div>
+                )}
+              </div>
+            </div>
           </div>
         )}
         
@@ -301,6 +346,30 @@ export function BasvuruDetay({
               userRole={userRole}
               onEkBelgeGuncellendi={onEkBelgeGuncellendi}
             />
+          </div>
+        )}
+        
+        {/* Action buttons for SKS and Danışman */}
+        {(userRole === 'sks' || userRole === 'danisman') && (onApprove || onReject) && (
+          <div className="mt-6 pt-6 border-t flex justify-end gap-4">
+            {onReject && (
+              <button
+                onClick={() => onReject(basvuru)}
+                className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <XCircle className="w-4 h-4" />
+                Reddet
+              </button>
+            )}
+            {onApprove && (
+              <button
+                onClick={() => onApprove(basvuru)}
+                className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                <CheckCircle className="w-4 h-4" />
+                Onayla
+              </button>
+            )}
           </div>
         )}
       </div>
