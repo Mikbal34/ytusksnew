@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, CheckCircle, XCircle, FileDown, Users, Calendar, X, Eye, FileText, LogOut, AlertCircle, Trash2 } from 'lucide-react';
 import { EtkinlikBasvuru, Kulup, EkBelge } from '../types';
-import { getBasvurular, updateBasvuru, getKulupler, etkinlikBelgeIndir, belgeOnayla, belgeReddet, ekBelgeIndir, ekBelgeOnayla, ekBelgeReddet, temizleTekrarOnaylari } from '../utils/supabaseStorage';
+import { getBasvurular, getBasvurularSKSOptimized, updateBasvuru, getKulupler, etkinlikBelgeIndir, belgeOnayla, belgeReddet, ekBelgeIndir, ekBelgeOnayla, ekBelgeReddet, temizleTekrarOnaylari } from '../utils/supabaseStorage';
 import { generatePDF } from '../utils/pdf';
 import { Takvim } from './Takvim';
 import { BasvuruDetay } from './BasvuruDetay';
@@ -54,7 +54,8 @@ export const SKSPaneli: React.FC = () => {
   const fetchBasvurular = async () => {
       try {
         setLoading(true);
-        const allBasvurular = await getBasvurular();
+        console.log('⚡ SKS Paneli - OPTIMIZE edilmiş veri çekme başlıyor...');
+        const allBasvurular = await getBasvurularSKSOptimized(50, 0); // OPTIMIZE: İlk 50 kayıt
         
         if (Array.isArray(allBasvurular)) {
           console.log('Tüm başvurular:', allBasvurular.length);

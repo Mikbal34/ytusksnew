@@ -318,6 +318,117 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
   }
 };
 
+// OPTIMIZE: SKS Paneli için hızlı başvuru listesi
+export const getBasvurularSKSOptimized = async (limit: number = 100, offset: number = 0): Promise<EtkinlikBasvuru[]> => {
+  try {
+    console.log(`Başvurular getiriliyor (SKS OPTIMIZE) - Limit: ${limit}, Offset: ${offset}`);
+    
+    // Önce kullanıcının oturum bilgilerini kontrol et
+    const { data: sessionData } = await supabase.auth.getSession();
+    
+    // Eğer oturum yoksa, admin client'ı kullan
+    const client = sessionData.session ? supabase : supabaseAdmin;
+    console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
+    
+    // OPTIMIZE: Sadece SKS için gerekli alanları çek
+    const { data, error } = await client
+      .from('etkinlik_basvurulari')
+      .select(`
+        id,
+        kulup_id,
+        etkinlik_adi,
+        etkinlik_turu,
+        etkinlik_fakulte,
+        etkinlik_yeri_detay,
+        aciklama,
+        revizyon,
+        orijinal_basvuru_id,
+        danisman_onay,
+        sks_onay,
+        created_at,
+        kulupler!inner(isim),
+        etkinlik_belgeleri(id, tip, danisman_onay, sks_onay),
+        ek_belgeler(id, tip, danisman_onay, sks_onay, olusturma_tarihi),
+        etkinlik_zaman_dilimleri(baslangic, bitis)
+      `)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    
+    if (error) {
+      console.error('Başvurular getirilirken hata (SKS OPTIMIZE):', error);
+      throw error;
+    }
+    
+    console.log(`${data.length} başvuru veritabanından getirildi (SKS OPTIMIZE)`);
+    
+    // OPTIMIZE: Sadeleştirilmiş mapping
+    const basvurular: EtkinlikBasvuru[] = data.map(basvuru => {
+      // Zaman dilimleri
+      const zamanDilimleri = basvuru.etkinlik_zaman_dilimleri && basvuru.etkinlik_zaman_dilimleri.length > 0
+        ? basvuru.etkinlik_zaman_dilimleri.map((z: any) => ({ baslangic: z.baslangic, bitis: z.bitis }))
+        : [];
+      
+      // Kulüp adı
+      const kulupAdi = basvuru.kulupler?.isim || 'Bilinmeyen Kulüp';
+      
+      // OPTIMIZE: Sadece onay durumları için belgeler
+      const belgeler = basvuru.etkinlik_belgeleri
+        ? basvuru.etkinlik_belgeleri.map((belge: any) => ({
+            id: belge.id,
+            tip: belge.tip,
+            dosya: '', // OPTIMIZE: Dosya yolu gerekmiyor
+            dosyaAdi: '', // OPTIMIZE: Dosya adı gerekmiyor
+            danismanOnay: belge.danisman_onay,
+            sksOnay: belge.sks_onay
+          }))
+        : [];
+      
+      // OPTIMIZE: Ek belgeler için sadece temel bilgiler
+      const ekBelgeler = basvuru.ek_belgeler
+        ? basvuru.ek_belgeler.map((belge: any) => ({
+            id: belge.id,
+            etkinlikId: basvuru.id,
+            tip: belge.tip,
+            dosya: '', // OPTIMIZE: Dosya yolu gerekmiyor
+            dosyaAdi: '', // OPTIMIZE: Dosya adı gerekmiyor
+            olusturmaTarihi: belge.olusturma_tarihi,
+            danismanOnay: belge.danisman_onay,
+            sksOnay: belge.sks_onay
+          }))
+        : [];
+      
+      return {
+        id: basvuru.id,
+        kulupId: basvuru.kulup_id,
+        kulupAdi: kulupAdi,
+        etkinlikAdi: basvuru.etkinlik_adi,
+        etkinlikYeri: {
+          fakulte: basvuru.etkinlik_fakulte || '',
+          detay: basvuru.etkinlik_yeri_detay || ''
+        },
+        etkinlikTuru: basvuru.etkinlik_turu || undefined,
+        zamanDilimleri,
+        aciklama: basvuru.aciklama || '',
+        sponsorlar: [], // OPTIMIZE: Sponsorlar gerekmiyor
+        konusmacilar: [], // OPTIMIZE: Konuşmacılar gerekmiyor
+        belgeler: belgeler,
+        ekBelgeler: ekBelgeler,
+        revizyon: basvuru.revizyon || false,
+        danismanOnay: basvuru.danisman_onay,
+        sksOnay: basvuru.sks_onay,
+        orijinalBasvuruId: basvuru.orijinal_basvuru_id
+      };
+    });
+    
+    console.log(`${basvurular.length} başvuru dönüştürüldü (SKS OPTIMIZE)`);
+    
+    return basvurular;
+  } catch (error) {
+    console.error('Başvurular getirilirken bir hata oluştu (SKS OPTIMIZE):', error);
+    throw error;
+  }
+};
+
 export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null> => {
   try {
     console.log(`ID: ${id} olan başvuru getiriliyor...`);
@@ -858,7 +969,7 @@ export const clearStorage = async () => {
 // Kulüpler için fonksiyonlar
 export const getKulupler = async (): Promise<Kulup[]> => {
   try {
-    console.log('Kulüpler getiriliyor...');
+    console.log('Kulüpler getiriliyor... (OPTIMIZE)');
     
     // Önce kullanıcının oturum bilgilerini kontrol et
     const { data: sessionData } = await supabase.auth.getSession();
@@ -867,32 +978,21 @@ export const getKulupler = async (): Promise<Kulup[]> => {
     const client = sessionData.session ? supabase : supabaseAdmin;
     console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
     
-    // Fetch clubs data
+    // OPTIMIZE: Sadece gerekli alanları çek
     const { data, error } = await client
       .from('kulupler')
       .select(`
-        *,
+        id,
+        isim,
+        baskan_ad_soyad,
+        baskan_eposta,
+        baskan_telefon,
+        oda_no,
         akademik_danismanlar (
           id, 
           ad_soyad, 
           bolum, 
-          eposta, 
-          telefon, 
-          fakulte, 
-          oda_no
-        ),
-        kulup_danismanlar!left(
-          id,
-          aktif,
-          akademik_danismanlar (
-            id,
-            ad_soyad,
-            bolum,
-            eposta,
-            telefon,
-            fakulte,
-            oda_no
-          )
+          eposta
         )
       `);
     
@@ -901,75 +1001,37 @@ export const getKulupler = async (): Promise<Kulup[]> => {
       throw error;
     }
     
-    // Fetch all alt_topluluklar
-    const { data: allAltTopluluklar, error: altError } = await client
-      .from('alt_topluluklar')
-      .select('kulup_id, isim');
+    console.log(`${data.length} kulüp bulundu. (OPTIMIZE - sadece temel alanlar)`);
     
-    if (altError) {
-      console.error('Alt topluluklar getirilirken hata oluştu:', altError);
-      // Continue without alt_topluluklar
-    }
-    
-    // Group alt_topluluklar by kulup_id
-    const altToplulukMap = new Map();
-    if (allAltTopluluklar) {
-      allAltTopluluklar.forEach(at => {
-        if (!altToplulukMap.has(at.kulup_id)) {
-          altToplulukMap.set(at.kulup_id, []);
-        }
-        altToplulukMap.get(at.kulup_id).push(at.isim);
-      });
-    }
-    
-    console.log(`${data.length} kulüp bulundu.`);
-    
-    // Veritabanından gelen veriyi frontend tipimize dönüştür
+    // OPTIMIZE: Sadeleştirilmiş mapping
     const kulupList = data.map(k => {
       const primaryDan = k.akademik_danismanlar ? {
         id: k.akademik_danismanlar.id,
         adSoyad: k.akademik_danismanlar.ad_soyad,
         bolum: k.akademik_danismanlar.bolum,
         eposta: k.akademik_danismanlar.eposta,
-        telefon: k.akademik_danismanlar.telefon,
-        fakulte: k.akademik_danismanlar.fakulte,
-        odaNo: k.akademik_danismanlar.oda_no
-      } as AkademikDanisman : undefined;
-
-      const coklu: AkademikDanisman[] | undefined = Array.isArray(k.kulup_danismanlar)
-        ? k.kulup_danismanlar
-            .filter((r: any) => r && r.aktif && r.akademik_danismanlar)
-            .slice(0, 2)
-            .map((r: any) => ({
-              id: r.akademik_danismanlar.id,
-              adSoyad: r.akademik_danismanlar.ad_soyad,
-              bolum: r.akademik_danismanlar.bolum,
-              eposta: r.akademik_danismanlar.eposta,
-              telefon: r.akademik_danismanlar.telefon,
-              fakulte: r.akademik_danismanlar.fakulte,
-              odaNo: r.akademik_danismanlar.oda_no
-            }))
-        : undefined;
-
-      const fallback: AkademikDanisman = primaryDan || (coklu && coklu[0]) || {
-        id: 'NA', adSoyad: '—', eposta: '', bolum: ''
-      } as any;
+        telefon: '', // OPTIMIZE: Gereksiz alanlar boş
+        fakulte: '', // OPTIMIZE: Gereksiz alanlar boş
+        odaNo: '' // OPTIMIZE: Gereksiz alanlar boş
+      } as AkademikDanisman : {
+        id: 'NA', adSoyad: '—', eposta: '', bolum: '', telefon: '', fakulte: '', odaNo: ''
+      } as AkademikDanisman;
 
       return {
         id: k.id,
         isim: k.isim,
-        akademikDanisman: fallback,
-        akademikDanismanlar: coklu,
+        akademikDanisman: primaryDan,
+        akademikDanismanlar: undefined, // OPTIMIZE: Çoklu danışman sistemini devre dışı bırak
         baskan: {
-          adSoyad: k.baskan_ad_soyad,
-          eposta: k.baskan_eposta,
-          telefon: k.baskan_telefon
+          adSoyad: k.baskan_ad_soyad || '',
+          eposta: k.baskan_eposta || '',
+          telefon: k.baskan_telefon || ''
         },
-        odaNo: k.oda_no,
-        digerTesisler: k.diger_tesisler,
-        altTopluluklar: altToplulukMap.has(k.id) ? altToplulukMap.get(k.id) : k.alt_topluluklar,
-        tuzuk: k.tuzuk,
-        logo: k.logo
+        odaNo: k.oda_no || '',
+        digerTesisler: '', // OPTIMIZE: Gereksiz alan
+        altTopluluklar: undefined, // OPTIMIZE: Gereksiz alan
+        tuzuk: '', // OPTIMIZE: Gereksiz alan
+        logo: '' // OPTIMIZE: Gereksiz alan
       } as Kulup;
     });
     
