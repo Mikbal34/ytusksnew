@@ -369,7 +369,7 @@ export const getBasvurularSKSOptimized = async (limit: number = 100, offset: num
         : [];
       
       // Kulüp adı
-      const kulupAdi = basvuru.kulupler?.isim || 'Bilinmeyen Kulüp';
+      const kulupAdi = (basvuru.kulupler as any)?.isim || 'Bilinmeyen Kulüp';
       
       // OPTIMIZE: Sadece onay durumları için belgeler
       const belgeler = basvuru.etkinlik_belgeleri
@@ -1005,11 +1005,16 @@ export const getKulupler = async (): Promise<Kulup[]> => {
     
     // OPTIMIZE: Sadeleştirilmiş mapping
     const kulupList = data.map(k => {
-      const primaryDan = k.akademik_danismanlar ? {
-        id: k.akademik_danismanlar.id,
-        adSoyad: k.akademik_danismanlar.ad_soyad,
-        bolum: k.akademik_danismanlar.bolum,
-        eposta: k.akademik_danismanlar.eposta,
+      // Akademik danışman bilgisi - array veya single object olabilir
+      const danismanData = Array.isArray(k.akademik_danismanlar) 
+        ? k.akademik_danismanlar[0] 
+        : k.akademik_danismanlar;
+        
+      const primaryDan = danismanData ? {
+        id: danismanData.id,
+        adSoyad: danismanData.ad_soyad,
+        bolum: danismanData.bolum,
+        eposta: danismanData.eposta,
         telefon: '', // OPTIMIZE: Gereksiz alanlar boş
         fakulte: '', // OPTIMIZE: Gereksiz alanlar boş
         odaNo: '' // OPTIMIZE: Gereksiz alanlar boş

@@ -226,50 +226,76 @@ export const SKSPaneli: React.FC = () => {
     }
   };
 
+  // OPTIMIZE: Optimistic update - sayfa yenilenmeden state güncelleme
+  const updateBelgeStateOptimistic = (belgeId: string, yeniOnayDurumu: any, belgeType: 'etkinlik' | 'ek') => {
+    if (belgeType === 'ek') {
+      // Ek belgeleri güncelle
+      setTumEkBelgeler(prev => prev.map(belge => 
+        belge.id === belgeId 
+          ? { ...belge, sksOnay: yeniOnayDurumu }
+          : belge
+      ));
+      
+      // Bekleyen sayıları güncelle
+      setBekleyenEkBelgeSayisi(prev => yeniOnayDurumu ? prev - 1 : prev);
+    }
+    
+    if (belgeType === 'etkinlik') {
+      // Ana başvuru listelerindeki belgeleri güncelle
+      const updateBasvurular = (basvuruList: EtkinlikBasvuru[]) => 
+        basvuruList.map(basvuru => ({
+          ...basvuru,
+          belgeler: basvuru.belgeler?.map(belge =>
+            belge.id === belgeId
+              ? { ...belge, sksOnay: yeniOnayDurumu }
+              : belge
+          )
+        }));
+        
+      // Tüm state'leri güncelle
+      setBasvurular(prev => updateBasvurular(prev));
+      setOnaylananEtkinlikler(prev => updateBasvurular(prev));
+      setEtkinlikOnayliBelgeBekleyenler(prev => updateBasvurular(prev));
+      setTumBasvurular(prev => updateBasvurular(prev));
+    }
+    
+    // Detay gösterilen başvuruyu güncelle (varsa)
+    if (detayBasvuru) {
+      setDetayBasvuru(prev => prev ? {
+        ...prev,
+        belgeler: prev.belgeler?.map(belge =>
+          belge.id === belgeId
+            ? { ...belge, sksOnay: yeniOnayDurumu }
+            : belge
+        ),
+        ekBelgeler: prev.ekBelgeler?.map(belge =>
+          belge.id === belgeId
+            ? { ...belge, sksOnay: yeniOnayDurumu }
+            : belge
+        )
+      } : null);
+    }
+  };
+
   const handleEkBelgeOnayla = async (belgeId: string) => {
     try {
+      // OPTIMIZE: Optimistic update - UI'yı hemen güncelle
+      const onayBilgisi = {
+        durum: 'Onaylandı' as const,
+        tarih: new Date().toISOString(),
+        redSebebi: undefined
+      };
+      
+      updateBelgeStateOptimistic(belgeId, onayBilgisi, 'ek');
+      
+      // API çağrısını yap
       const success = await ekBelgeOnayla(belgeId, 'SKS');
+      
       if (success) {
         alert('Belge başarıyla onaylandı.');
-        
-        // Başvuruları yeniden yükle
-        const guncelBasvurular = await getBasvurular();
-        
-        // Ek belgeleri güncelle (yalnızca danışman onaylı olanlar)
-        const tumBelgeler: ExtendedEkBelge[] = [];
-        guncelBasvurular.forEach(basvuru => {
-          if (basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0) {
-            basvuru.ekBelgeler
-              .filter(belge => belge.danismanOnay?.durum === 'Onaylandı')
-              .forEach(belge => {
-                tumBelgeler.push({
-                  ...belge,
-                  etkinlikAdi: basvuru.etkinlikAdi,
-                  kulupAdi: basvuru.kulupAdi
-                });
-              });
-          }
-        });
-        setTumEkBelgeler(tumBelgeler);
-        
-        // Diğer state'leri güncelle
-        const ekBelgesiOlanlar = guncelBasvurular.filter(basvuru => 
-          basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0
-        );
-        setEkBelgesiOlanEtkinlikler(ekBelgesiOlanlar);
-        
-        const bekleyenEkBelgeSayisi = tumBelgeler.filter(belge => !belge.sksOnay).length;
-        setBekleyenEkBelgeSayisi(bekleyenEkBelgeSayisi);
-        
-        // Detay gösterilen başvuruyu güncelle
-        if (detayBasvuru) {
-          const guncelBasvurular = await getBasvurular();
-          const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-          if (guncelDetayBasvuru) {
-            setDetayBasvuru(guncelDetayBasvuru);
-          }
-        }
       } else {
+        // Başarısız olursa eski haline döndür
+        updateBelgeStateOptimistic(belgeId, null, 'ek');
         alert('Belge onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
       }
     } catch (error) {
@@ -285,84 +311,64 @@ export const SKSPaneli: React.FC = () => {
         return;
       }
       
+      // OPTIMIZE: Optimistic update - UI'yı hemen güncelle
+      const redBilgisi = {
+        durum: 'Reddedildi' as const,
+        tarih: new Date().toISOString(),
+        redSebebi: redSebebi
+      };
+      
+      updateBelgeStateOptimistic(belgeId, redBilgisi, 'ek');
+      
+      // API çağrısını yap
       const success = await ekBelgeReddet(belgeId, 'SKS', redSebebi);
+      
       if (success) {
         alert('Belge başarıyla reddedildi.');
-        
-        // Başvuruları yeniden yükle
-        const guncelBasvurular = await getBasvurular();
-        
-        // Ek belgeleri güncelle (yalnızca danışman onaylı olanlar)
-        const tumBelgeler: ExtendedEkBelge[] = [];
-        guncelBasvurular.forEach(basvuru => {
-          if (basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0) {
-            basvuru.ekBelgeler
-              .filter(belge => belge.danismanOnay?.durum === 'Onaylandı')
-              .forEach(belge => {
-                tumBelgeler.push({
-                  ...belge,
-                  etkinlikAdi: basvuru.etkinlikAdi,
-                  kulupAdi: basvuru.kulupAdi
-                });
-              });
-          }
-        });
-        setTumEkBelgeler(tumBelgeler);
-        
-        // Diğer state'leri güncelle
-        const ekBelgesiOlanlar = guncelBasvurular.filter(basvuru => 
-          basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0
-        );
-        setEkBelgesiOlanEtkinlikler(ekBelgesiOlanlar);
-        
-        const bekleyenEkBelgeSayisi = tumBelgeler.filter(belge => !belge.sksOnay).length;
-        setBekleyenEkBelgeSayisi(bekleyenEkBelgeSayisi);
-        
-        // Detay gösterilen başvuruyu güncelle
-        if (detayBasvuru) {
-          const guncelBasvurular = await getBasvurular();
-          const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-          if (guncelDetayBasvuru) {
-            setDetayBasvuru(guncelDetayBasvuru);
-          }
-        }
       } else {
+        // Başarısız olursa eski haline döndür
+        updateBelgeStateOptimistic(belgeId, null, 'ek');
         alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
       }
     } catch (error) {
       console.error('Belge reddetme hatası:', error);
+      // Hata durumunda da eski haline döndür
+      updateBelgeStateOptimistic(belgeId, null, 'ek');
       alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
     }
   };
 
-  // Normal belge onaylama işlemi
+  // OPTIMIZE: Normal belge onaylama işlemi
   const handleBelgeOnayla = async (belgeId: string) => {
     try {
+      // OPTIMIZE: Optimistic update - UI'yı hemen güncelle
+      const onayBilgisi = {
+        durum: 'Onaylandı' as const,
+        tarih: new Date().toISOString(),
+        redSebebi: undefined
+      };
+      
+      updateBelgeStateOptimistic(belgeId, onayBilgisi, 'etkinlik');
+      
+      // API çağrısını yap
       const success = await belgeOnayla(belgeId, 'SKS');
+      
       if (success) {
         alert('Belge başarıyla onaylandı.');
-        
-        // 🚀 TÜM STATE'LERİ ANLIK GÜNCELLE
-        await fetchBasvurular();
-        
-        // Detay gösterilen başvuruyu güncelle
-        if (detayBasvuru) {
-          const guncelBasvurular = await getBasvurular();
-          const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-          if (guncelDetayBasvuru) {
-            setDetayBasvuru(guncelDetayBasvuru);
-          }
-        }
       } else {
+        // Başarısız olursa eski haline döndür
+        updateBelgeStateOptimistic(belgeId, null, 'etkinlik');
         alert('Belge onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
       }
     } catch (error) {
       console.error('Belge onaylama hatası:', error);
+      // Hata durumunda eski haline döndür
+      updateBelgeStateOptimistic(belgeId, null, 'etkinlik');
       alert('Belge onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
     }
   };
 
-  // Belge reddetme işlemi
+  // OPTIMIZE: Belge reddetme işlemi
   const handleBelgeReddet = async (belgeId: string, redSebebi: string) => {
     try {
       if (!redSebebi.trim()) {
@@ -370,26 +376,29 @@ export const SKSPaneli: React.FC = () => {
         return;
       }
       
+      // OPTIMIZE: Optimistic update - UI'yı hemen güncelle
+      const redBilgisi = {
+        durum: 'Reddedildi' as const,
+        tarih: new Date().toISOString(),
+        redSebebi: redSebebi
+      };
+      
+      updateBelgeStateOptimistic(belgeId, redBilgisi, 'etkinlik');
+      
+      // API çağrısını yap
       const success = await belgeReddet(belgeId, 'SKS', redSebebi);
+      
       if (success) {
         alert('Belge başarıyla reddedildi.');
-        
-        // 🚀 TÜM STATE'LERİ ANLIK GÜNCELLE
-        await fetchBasvurular();
-        
-        // Detay gösterilen başvuruyu güncelle
-        if (detayBasvuru) {
-          const guncelBasvurular = await getBasvurular();
-          const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-          if (guncelDetayBasvuru) {
-            setDetayBasvuru(guncelDetayBasvuru);
-          }
-        }
       } else {
+        // Başarısız olursa eski haline döndür
+        updateBelgeStateOptimistic(belgeId, null, 'etkinlik');
         alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
       }
     } catch (error) {
       console.error('Belge reddetme hatası:', error);
+      // Hata durumunda eski haline döndür
+      updateBelgeStateOptimistic(belgeId, null, 'etkinlik');
       alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
     }
   };
@@ -400,60 +409,58 @@ export const SKSPaneli: React.FC = () => {
   // Not used in this view
   // const getBelgeDurumBilgisi = (belge: ExtendedEkBelge) => { /* ... */ };
 
+  // OPTIMIZE: Etkinlik onaylama - optimistic update
+  const updateEtkinlikStateOptimistic = (basvuru: EtkinlikBasvuru, yeniSksOnay: any) => {
+    // Tüm state'lerdeki bu başvuruyu güncelle
+    const updateBasvuruInList = (list: EtkinlikBasvuru[]) => 
+      list.map(b => b.id === basvuru.id ? { ...b, sksOnay: yeniSksOnay } : b);
+    
+    setBasvurular(prev => updateBasvuruInList(prev));
+    setOnaylananEtkinlikler(prev => updateBasvuruInList(prev));
+    setEtkinlikOnayliBelgeBekleyenler(prev => updateBasvuruInList(prev));
+    setTumBasvurular(prev => updateBasvuruInList(prev));
+    
+    // Eğer onaylandıysa bekleyen listesinden kaldır
+    if (yeniSksOnay?.durum === 'Onaylandı') {
+      setBasvurular(prev => prev.filter(b => b.id !== basvuru.id));
+    }
+  };
+
   const handleOnay = async (basvuru: EtkinlikBasvuru) => {
     try {
       console.log('Etkinlik onaylanıyor:', basvuru.id);
       
-      // JSONB sisteminde durum kolonu yok - direkt onay bilgilerini güncelle
+      // OPTIMIZE: Optimistic update
+      const onayBilgisi = {
+        durum: 'Onaylandı' as const,
+        tarih: new Date().toISOString()
+      };
+      
+      updateEtkinlikStateOptimistic(basvuru, onayBilgisi);
+      
+      // API çağrısı
       const guncelBasvuru: EtkinlikBasvuru = {
         ...basvuru,
-        sksOnay: {
-          durum: 'Onaylandı',
-          tarih: new Date().toISOString()
-        }
+        sksOnay: onayBilgisi
       };
       
       await updateBasvuru(guncelBasvuru);
       console.log('Etkinlik başarıyla onaylandı');
       
-      // Email bildirimini gönder
-      try {
-        await sendSksOnayNotification(guncelBasvuru);
-        console.log('SKS onay bildirimi gönderildi');
-      } catch (emailError) {
+      // Email bildirimini gönder (arka planda)
+      sendSksOnayNotification(guncelBasvuru).catch(emailError => {
         console.error('Onay e-posta bildirimi gönderilirken hata:', emailError);
-      }
+      });
       
-      // Listeyi güncelle
-      const guncelBasvurular = await getBasvurular();
-      if (Array.isArray(guncelBasvurular)) {
-        // Filtreleri yeniden uygula
-        const bekleyenEtkinlikler = guncelBasvurular.filter(b => {
-          const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
-          const sksEtkinlikOnayYok = !b.sksOnay;
-          return danismanOnayli && sksEtkinlikOnayYok;
-        });
-        setBasvurular(bekleyenEtkinlikler);
-        
-        const onaylananlar = guncelBasvurular.filter(b => {
-          const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
-          const sksEtkinlikOnayli = b.sksOnay?.durum === 'Onaylandı';
-          const tumAnaBelgelerOnayli = (b.belgeler || []).every(doc => doc.sksOnay?.durum === 'Onaylandı');
-          const tumEkBelgelerOnayli = (b.ekBelgeler || []).every(ek => ek.sksOnay?.durum === 'Onaylandı');
-          return danismanOnayli && sksEtkinlikOnayli && tumAnaBelgelerOnayli && tumEkBelgelerOnayli;
-        });
-        setOnaylananEtkinlikler(onaylananlar);
-        setTumBasvurular(guncelBasvurular.filter(b => b.sksOnay));
-        
-        // Takvimi güncellemek için key'i değiştir
-        setTakvimKey(prev => prev + 1);
-      }
+      // Takvimi güncellemek için key'i değiştir
+      setTakvimKey(prev => prev + 1);
     } catch (error) {
       console.error('Etkinlik onaylanırken hata oluştu:', error);
       alert('Etkinlik onaylanırken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
     }
   };
 
+  // OPTIMIZE: Etkinlik reddetme
   const handleRed = async () => {
     if (!redSebebi.trim() || !secilenBasvuru) {
       alert('Lütfen red sebebini belirtiniz!');
@@ -462,46 +469,37 @@ export const SKSPaneli: React.FC = () => {
     
     try {
       console.log('Etkinlik reddediliyor:', secilenBasvuru.id);
+      
+      // OPTIMIZE: Optimistic update
+      const redBilgisi = {
+        durum: 'Reddedildi' as const,
+        tarih: new Date().toISOString(),
+        redSebebi
+      };
+      
+      updateEtkinlikStateOptimistic(secilenBasvuru, redBilgisi);
+      
+      // Modal'ı hemen kapat
+      setSecilenBasvuru(null);
+      setRedSebebi('');
+      
+      // API çağrısı
       const guncelBasvuru: EtkinlikBasvuru = {
         ...secilenBasvuru,
-        sksOnay: {
-          durum: 'Reddedildi',
-          tarih: new Date().toISOString(),
-          redSebebi
-        }
+        sksOnay: redBilgisi
       };
       
       await updateBasvuru(guncelBasvuru);
       console.log('Etkinlik başarıyla reddedildi');
       
-      // Email bildirimini gönder
-      try {
-        await sendSksRedNotification(guncelBasvuru, redSebebi);
-        console.log('SKS red bildirimi gönderildi');
-      } catch (emailError) {
+      // Email bildirimini gönder (arka planda)
+      sendSksRedNotification(guncelBasvuru, redSebebi).catch(emailError => {
         console.error('Red e-posta bildirimi gönderilirken hata:', emailError);
-      }
-      
-      setSecilenBasvuru(null);
-      setRedSebebi('');
-      
-      // Listeyi güncelle
-      const guncelBasvurular = await getBasvurular();
-      if (Array.isArray(guncelBasvurular)) {
-        const bekleyenEtkinlikler = guncelBasvurular.filter(b => {
-          const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
-          const sksEtkinlikOnayYok = !b.sksOnay;
-          return danismanOnayli && sksEtkinlikOnayYok;
-        });
-        setBasvurular(bekleyenEtkinlikler);
-        setTumBasvurular(guncelBasvurular.filter(b => b.sksOnay));
-        
-        // Takvimi güncellemek için key'i değiştir  
-        setTakvimKey(prev => prev + 1);
-      }
+      });
     } catch (error) {
       console.error('Etkinlik reddedilirken hata oluştu:', error);
       alert('Etkinlik reddedilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
+      // Hata durumunda state'i eski haline döndürmek isterseniz burada yapabilirsiniz
     }
   };
 
