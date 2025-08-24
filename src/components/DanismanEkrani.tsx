@@ -349,7 +349,7 @@ export function DanismanEkrani() {
       const success = await belgeReddet(belgeId, 'Danışman', redSebebi);
       if (success) {
         console.log('✅ Belge başarıyla reddedildi:', belgeId);
-        alert('Belge başarıyla reddedildi. NOT: Reddedilen belgesi olan bir başvuruyu onaylayamazsınız. Başvuruyu reddetmek için "Reddet" butonunu kullanabilirsiniz.');
+        alert('Belge başarıyla reddedildi.');
         
         // State'i akıllı bir şekilde güncelle (unified sistem için)
         const updateBelgeInBasvuru = (basvuru: EtkinlikBasvuru): EtkinlikBasvuru => {

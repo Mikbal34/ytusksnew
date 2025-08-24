@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, X, Upload } from 'lucide-react';
 import { EtkinlikBasvuru, Sponsor, Konusmaci, EtkinlikBelge, Kulup } from '../types';
-import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler } from '../utils/supabaseStorage';
+import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil } from '../utils/supabaseStorage';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
 import { sendEtkinlikBasvuruNotification } from '../utils/emailService';
@@ -368,16 +368,50 @@ export function EtkinlikBasvuruFormu() {
     belgeReplaceInputRefs.current[tip]?.click();
   };
 
-  const handleBelgeReplaceChange = (tip: EtkinlikBelge['tip'], e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBelgeReplaceChange = async (tip: EtkinlikBelge['tip'], e: React.ChangeEvent<HTMLInputElement>) => {
     const file = (e.target.files || [])[0] || null;
     if (!file) return;
     if (file.type !== 'application/pdf') { alert('Lütfen PDF yükleyin'); return; }
     if (file.size > 5 * 1024 * 1024) { alert('Dosya boyutu 5MBı aşmamalı'); return; }
-    // Değiştirilecek belgeyi, yeni belge olarak ekleme sırasına koyuyoruz; not alanını boş bırakıyoruz.
+    
+    // Sadece seçilen belgeyi veritabanından sil (aynı tipte birden fazla belge varsa sadece ilkini)
+    if (mevcutBasvuru?.belgeler) {
+      const eskiBelgeler = mevcutBasvuru.belgeler.filter(b => b.tip === tip);
+      const eskiBelge = eskiBelgeler[0]; // Sadece ilk belgeyi al
+      
+      if (eskiBelge && eskiBelge.id && typeof eskiBelge.dosya === 'string') {
+        try {
+          console.log(`Eski belge siliniyor: ${eskiBelge.id}, dosya yolu: ${eskiBelge.dosya}`);
+          const silindi = await etkinlikBelgeSil(eskiBelge.id, eskiBelge.dosya);
+          if (silindi) {
+            console.log('Eski belge veritabanından başarıyla silindi');
+            // Başvuruyu yeniden yükle ve state'i güncelle
+            if (basvuruId) {
+              try {
+                const guncelBasvuru = await getBasvuruById(basvuruId);
+                if (guncelBasvuru) {
+                  setMevcutBasvuru(guncelBasvuru);
+                }
+              } catch (refreshError) {
+                console.error('Başvuru yeniden yüklenirken hata:', refreshError);
+              }
+            }
+          } else {
+            console.error('Eski belge silinemedi');
+          }
+        } catch (error) {
+          console.error('Eski belge silinirken hata:', error);
+          // Hata olsa da devam et
+        }
+      }
+    }
+    
+    // Eski belgeleri temizle ve yeni belgeyi ekle (belge değiştirme işlemi)
     setBelgeler(prev => ({
       ...prev,
-      [tip]: [ ...(prev[tip] || []), { file, note: '' } ]
+      [tip]: [{ file, note: '' }] // Eski belgeleri sil, sadece yeni belgeyi ekle
     }));
+    
     // Geçici input temizliği
     setTimeout(() => {
       if (belgeReplaceInputRefs.current[tip]) {

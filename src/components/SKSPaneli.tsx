@@ -43,6 +43,7 @@ export const SKSPaneli: React.FC = () => {
   // const [belgeSiralama] = useState<'yeni' | 'eski'>('yeni');
   // const [activeRedBelgeId] = useState<string | null>(null);
   const [temizlemeLoading, setTemizlemeLoading] = useState(false);
+  const [takvimKey, setTakvimKey] = useState(0);
 
   const handleLogout = async () => {
     await logout();
@@ -181,12 +182,7 @@ export const SKSPaneli: React.FC = () => {
     basvuru.kulupAdi.toLowerCase().includes(etkinlikAramaMetni.toLowerCase())
   );
 
-  // Yardımcı: SKS tarafından onaylanmamış (bekleyen) belge var mı?
-  const hasAnyDocSksNotApproved = (b: EtkinlikBasvuru) => {
-    const mainPending = (b.belgeler || []).some(doc => doc && doc.sksOnay?.durum !== 'Onaylandı');
-    const extraPending = (b.ekBelgeler || []).some(doc => doc && doc.sksOnay?.durum !== 'Onaylandı');
-    return mainPending || extraPending;
-  };
+
 
   // etkinlikOnayliBelgeBekleyenler state'ini kullanıyoruz artık
 
@@ -454,6 +450,9 @@ export const SKSPaneli: React.FC = () => {
         });
         setOnaylananEtkinlikler(onaylananlar);
         setTumBasvurular(guncelBasvurular.filter(b => b.sksOnay));
+        
+        // Takvimi güncellemek için key'i değiştir
+        setTakvimKey(prev => prev + 1);
       }
     } catch (error) {
       console.error('Etkinlik onaylanırken hata oluştu:', error);
@@ -502,6 +501,9 @@ export const SKSPaneli: React.FC = () => {
         });
         setBasvurular(bekleyenEtkinlikler);
         setTumBasvurular(guncelBasvurular.filter(b => b.sksOnay));
+        
+        // Takvimi güncellemek için key'i değiştir  
+        setTakvimKey(prev => prev + 1);
       }
     } catch (error) {
       console.error('Etkinlik reddedilirken hata oluştu:', error);
@@ -540,6 +542,9 @@ export const SKSPaneli: React.FC = () => {
             // SKS tarafından incelenmiş tüm başvurular
             const incelenenler = guncelBasvurular.filter(b => b.sksOnay);
             setTumBasvurular(incelenenler);
+            
+            // Takvimi güncellemek için key'i değiştir
+            setTakvimKey(prev => prev + 1);
             
           } else {
             alert('Temizlenecek tekrarlanan onay kaydı bulunamadı.');
@@ -661,9 +666,7 @@ export const SKSPaneli: React.FC = () => {
                   // Ek belgeleri var mı kontrol et
                   const hasAdditionalDocs = basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0;
                   const hasUnreviewedAdditionalDocs = hasAdditionalDocs && basvuru.ekBelgeler && basvuru.ekBelgeler.some(belge => !belge.sksOnay);
-                  
-                  // Onay düğmesi her durumda aktif; onay öncesi uyarı/confirm verilecek
-                  const isApproveButtonActive = true;
+
                   
                   return (
                     <div key={basvuru.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50">
@@ -786,7 +789,7 @@ export const SKSPaneli: React.FC = () => {
               </div>
             </div>
 
-            <Takvim onaylananEtkinlikler={onaylananEtkinlikler} />
+            <Takvim key={takvimKey} onaylananEtkinlikler={onaylananEtkinlikler} />
           </div>
 
           <div className="bg-white rounded-xl shadow-lg p-6">
@@ -1080,8 +1083,8 @@ export const SKSPaneli: React.FC = () => {
                           </div>
                           <div className="text-sm text-gray-600">{basvuru.kulupAdi}</div>
                           <div className="text-sm text-gray-600 mt-1">
-                            <div>Başlangıç: {new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR')}</div>
-                            <div>Bitiş: {new Date(basvuru.bitisTarihi).toLocaleString('tr-TR')}</div>
+                            <div>Başlangıç: {basvuru.baslangicTarihi ? new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
+                            <div>Bitiş: {basvuru.bitisTarihi ? new Date(basvuru.bitisTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
                           </div>
                           <div className="text-sm text-green-600 mt-2">
                             Onay Tarihi: {basvuru.sksOnay?.tarih ? new Date(basvuru.sksOnay.tarih).toLocaleString('tr-TR') : '-'}
@@ -1111,8 +1114,8 @@ export const SKSPaneli: React.FC = () => {
                           <div className="font-medium text-gray-800">{basvuru.etkinlikAdi}</div>
                           <div className="text-sm text-gray-600">{basvuru.kulupAdi}</div>
                           <div className="text-sm text-gray-600 mt-1">
-                            <div>Başlangıç: {new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR')}</div>
-                            <div>Bitiş: {new Date(basvuru.bitisTarihi).toLocaleString('tr-TR')}</div>
+                            <div>Başlangıç: {basvuru.baslangicTarihi ? new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
+                            <div>Bitiş: {basvuru.bitisTarihi ? new Date(basvuru.bitisTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
                           </div>
                           <div className="text-sm text-red-600 mt-2">
                             Red Tarihi: {basvuru.sksOnay?.tarih ? new Date(basvuru.sksOnay.tarih).toLocaleString('tr-TR') : '-'}
