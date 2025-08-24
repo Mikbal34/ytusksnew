@@ -292,7 +292,7 @@ export function EkBelgeYonetimi({ etkinlik, userRole, onEkBelgeGuncellendi }: Ek
               <textarea
                 value={yeniBelge.aciklama}
                 onChange={handleAciklamaChange}
-                placeholder="Belge hakkında açıklama yazınız..."
+                placeholder="Belge ile ilgili not ekleyin (opsiyonel)."
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 rows={3}
               />

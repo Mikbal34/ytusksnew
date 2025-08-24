@@ -35,7 +35,20 @@ export const supabase = _supabase || (_supabase = createClient(supabaseUrl, supa
 
 // Admin işlemleri için service role anahtar ile client 
 // Bu client yalnızca admin işlemlerinde kullanılmalıdır
-export const supabaseAdmin = _supabaseAdmin || (_supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, options));
+// RLS (Row Level Security) politikalarını bypass eder
+const adminOptions = {
+  ...options,
+  db: {
+    schema: 'public'
+  },
+  auth: {
+    ...options.auth,
+    autoRefreshToken: false,
+    persistSession: false
+  }
+};
+
+export const supabaseAdmin = _supabaseAdmin || (_supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, adminOptions));
 
 // API erişimi için yardımcı fonksiyon
 export const supabaseApi = {

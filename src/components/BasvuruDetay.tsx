@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { EtkinlikBasvuru } from '../types';
 
-import { FileDown, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { FileDown, CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react';
 import { EkBelgeYonetimi } from './EkBelgeYonetimi';
 
 interface BasvuruDetayProps {
@@ -35,10 +35,39 @@ export function BasvuruDetay({
 }: BasvuruDetayProps) {
   const [redSebebi, setRedSebebi] = useState<string>('');
   const [activeRedBelgeId, setActiveRedBelgeId] = useState<string | null>(null);
+  
+  // Belge notu popup için state'ler
+  const [belgeNotuPopup, setBelgeNotuPopup] = useState<{
+    isOpen: boolean;
+    belgeAdi: string;
+    belgeNotu: string;
+  }>({
+    isOpen: false,
+    belgeAdi: '',
+    belgeNotu: ''
+  });
 
   if (!basvuru) {
     return null;
   }
+
+  // Belge notunu popup'ta göster
+  const handleBelgeNotuGoster = (belgeAdi: string, belgeNotu: string) => {
+    setBelgeNotuPopup({
+      isOpen: true,
+      belgeAdi,
+      belgeNotu
+    });
+  };
+
+  // Belge notu popup'ını kapat
+  const handleBelgeNotuKapat = () => {
+    setBelgeNotuPopup({
+      isOpen: false,
+      belgeAdi: '',
+      belgeNotu: ''
+    });
+  };
 
   // Belge onay göstergesi ve onay/red butonları (JSONB Sistem)
   const renderOnayDurumu = (belgeId: string, belge?: any) => {
@@ -183,6 +212,51 @@ export function BasvuruDetay({
   };
 
   return (
+    <>
+      {/* Belge Notu Popup Modal */}
+      {belgeNotuPopup.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-96 overflow-hidden">
+            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Info className="w-5 h-5" />
+                Belge Notu
+              </h3>
+              <button
+                onClick={handleBelgeNotuKapat}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <XCircle className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <h4 className="font-semibold text-gray-700 mb-2">Belge:</h4>
+                <p className="text-gray-900 bg-gray-50 p-3 rounded-lg break-words">
+                  {belgeNotuPopup.belgeAdi}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Not:</h4>
+                <div className="text-gray-900 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                  <p className="whitespace-pre-wrap break-words">
+                    {belgeNotuPopup.belgeNotu || 'Not bulunmuyor.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <button
+                onClick={handleBelgeNotuKapat}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="space-y-6">
       <div className="space-y-4">
         {basvuru.revizyon && (
@@ -288,7 +362,18 @@ export function BasvuruDetay({
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                 >
                   <div className="flex flex-col">
-                    <span className="text-gray-900">{belge.tip}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-900">{belge.tip}</span>
+                      {belge.belgeNotu && (
+                        <button
+                          onClick={() => handleBelgeNotuGoster(belge.dosyaAdi, belge.belgeNotu)}
+                          className="p-0.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-full flex-shrink-0"
+                          title="Belge notunu gör"
+                        >
+                          <Info className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
                     <span className="text-xs text-gray-500">{belge.dosyaAdi}</span>
                   </div>
                   
@@ -374,5 +459,6 @@ export function BasvuruDetay({
         )}
       </div>
     </div>
+    </>
   );
 }

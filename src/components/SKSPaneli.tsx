@@ -50,9 +50,8 @@ export const SKSPaneli: React.FC = () => {
     navigate('/');
   };
 
-  useEffect(() => {
-    console.log('SKSPaneli bileşeni yükleniyor...');
-    const fetchBasvurular = async () => {
+  // Tüm state'leri yenileme fonksiyonu
+  const fetchBasvurular = async () => {
       try {
         setLoading(true);
         const allBasvurular = await getBasvurular();
@@ -163,8 +162,10 @@ export const SKSPaneli: React.FC = () => {
       } finally {
         setLoading(false);
       }
-    };
-    
+  };
+
+  useEffect(() => {
+    console.log('SKSPaneli bileşeni yükleniyor...');
     fetchBasvurular();
   }, []);
 
@@ -261,6 +262,7 @@ export const SKSPaneli: React.FC = () => {
         
         // Detay gösterilen başvuruyu güncelle
         if (detayBasvuru) {
+          const guncelBasvurular = await getBasvurular();
           const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
           if (guncelDetayBasvuru) {
             setDetayBasvuru(guncelDetayBasvuru);
@@ -317,6 +319,7 @@ export const SKSPaneli: React.FC = () => {
         
         // Detay gösterilen başvuruyu güncelle
         if (detayBasvuru) {
+          const guncelBasvurular = await getBasvurular();
           const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
           if (guncelDetayBasvuru) {
             setDetayBasvuru(guncelDetayBasvuru);
@@ -338,17 +341,12 @@ export const SKSPaneli: React.FC = () => {
       if (success) {
         alert('Belge başarıyla onaylandı.');
         
-        // Başvuruları yeniden yükle
-        const guncelBasvurular = await getBasvurular();
-        
-        // SKS onayı bekleyen başvurular listesini güncelle (danışman onaylı + SKS onaysız)
-        const bekleyenBasvurular = guncelBasvurular.filter(b => 
-          b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
-        );
-        setBasvurular(bekleyenBasvurular);
+        // 🚀 TÜM STATE'LERİ ANLIK GÜNCELLE
+        await fetchBasvurular();
         
         // Detay gösterilen başvuruyu güncelle
         if (detayBasvuru) {
+          const guncelBasvurular = await getBasvurular();
           const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
           if (guncelDetayBasvuru) {
             setDetayBasvuru(guncelDetayBasvuru);
@@ -375,17 +373,12 @@ export const SKSPaneli: React.FC = () => {
       if (success) {
         alert('Belge başarıyla reddedildi.');
         
-        // Başvuruları yeniden yükle
-        const guncelBasvurular = await getBasvurular();
-        
-        // SKS onayı bekleyen başvurular listesini güncelle
-        const bekleyenBasvurular = guncelBasvurular.filter(b => 
-          b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
-        );
-        setBasvurular(bekleyenBasvurular);
+        // 🚀 TÜM STATE'LERİ ANLIK GÜNCELLE
+        await fetchBasvurular();
         
         // Detay gösterilen başvuruyu güncelle
         if (detayBasvuru) {
+          const guncelBasvurular = await getBasvurular();
           const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
           if (guncelDetayBasvuru) {
             setDetayBasvuru(guncelDetayBasvuru);
@@ -1192,34 +1185,32 @@ export const SKSPaneli: React.FC = () => {
             onBelgeOnayla={async (belgeId) => {
               const success = await belgeOnayla(belgeId, 'SKS');
               if (success) {
-                // Başvuruları yeniden yükle
-                const guncelBasvurular = await getBasvurular();
-                const bekleyenBasvurular = guncelBasvurular.filter(b => 
-                  b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
-                );
-                setBasvurular(bekleyenBasvurular);
+                // 🚀 TÜM STATE'LERİ ANLIK GÜNCELLE
+                await fetchBasvurular();
                 
                 // Detay gösterilen başvuruyu güncelle
-                const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-                if (guncelDetayBasvuru) {
-                  setDetayBasvuru(guncelDetayBasvuru);
+                if (detayBasvuru) {
+                  const guncelBasvurular = await getBasvurular();
+                  const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
+                  if (guncelDetayBasvuru) {
+                    setDetayBasvuru(guncelDetayBasvuru);
+                  }
                 }
               }
             }}
             onBelgeReddet={async (belgeId, redSebebi) => {
               const success = await belgeReddet(belgeId, 'SKS', redSebebi);
               if (success) {
-                // Başvuruları yeniden yükle
-                const guncelBasvurular = await getBasvurular();
-                const bekleyenBasvurular = guncelBasvurular.filter(b => 
-                  b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
-                );
-                setBasvurular(bekleyenBasvurular);
+                // 🚀 TÜM STATE'LERİ ANLIK GÜNCELLE
+                await fetchBasvurular();
                 
                 // Detay gösterilen başvuruyu güncelle
-                const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-                if (guncelDetayBasvuru) {
-                  setDetayBasvuru(guncelDetayBasvuru);
+                if (detayBasvuru) {
+                  const guncelBasvurular = await getBasvurular();
+                  const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
+                  if (guncelDetayBasvuru) {
+                    setDetayBasvuru(guncelDetayBasvuru);
+                  }
                 }
               }
             }}

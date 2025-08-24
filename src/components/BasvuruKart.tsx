@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarClock, FileEdit, Eye, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { CalendarClock, FileEdit, Eye, AlertCircle, CheckCircle, XCircle, Info, X } from 'lucide-react';
 import { EtkinlikBasvuru } from '../types';
 import { revizeEt } from '../utils/supabaseStorage';
+import { RevizyonGecmisiModal } from './RevizyonGecmisiModal';
 
 interface BasvuruKartProps {
   basvuru: EtkinlikBasvuru;
@@ -19,14 +20,47 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
   const [revizeSecimAcik, setRevizeSecimAcik] = useState(false);
   const [showDocDetails, setShowDocDetails] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [revizyonGecmisiAcik, setRevizyonGecmisiAcik] = useState(false);
+  
+  // Belge notu popup için state'ler
+  const [belgeNotuPopup, setBelgeNotuPopup] = useState<{
+    isOpen: boolean;
+    belgeAdi: string;
+    belgeNotu: string;
+  }>({
+    isOpen: false,
+    belgeAdi: '',
+    belgeNotu: ''
+  });
 
-  const handleRevize = async () => {
+  // Belge notunu popup'ta göster
+  const handleBelgeNotuGoster = (belgeAdi: string, belgeNotu: string) => {
+    setBelgeNotuPopup({
+      isOpen: true,
+      belgeAdi,
+      belgeNotu
+    });
+  };
+
+  // Belge notu popup'ını kapat
+  const handleBelgeNotuKapat = () => {
+    setBelgeNotuPopup({
+      isOpen: false,
+      belgeAdi: '',
+      belgeNotu: ''
+    });
+  };
+
+  const handleRevize = async (revizeTuru?: 'belgeler' | 'etkinlik' | 'ikisi') => {
+    console.log("🚀 REVIZE ET BUTONUNA BASILDI!");
+    console.log("Revize türü:", revizeTuru);
+    console.log("Başvuru durumu:", basvuru.danismanOnay, basvuru.sksOnay);
     try {
       setIsRevizing(true);
       console.log("Revize edilecek başvuru:", basvuru);
       
       // Revizyon işlemini başlat
-      const yeniBasvuru = await revizeEt(basvuru);
+      const yeniBasvuru = await revizeEt(basvuru, revizeTuru);
       console.log("Revize edilen başvuru:", yeniBasvuru);
       console.log("Revizyon durumu:", yeniBasvuru.revizyon);
       console.log("Danışman onayı:", yeniBasvuru.danismanOnay);
@@ -34,16 +68,19 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
       // Revize işlemini takip etmek için log ekle
       console.log("Revize edilen başvuru danışman onayına gönderiliyor...");
       
-      // Revize işlemi başarılı olduktan sonra, düzenleme sayfasına yönlendir
-      navigate(`/kulup-paneli/basvuru-duzenle/${yeniBasvuru.id}`);
+      // Yönlendirme işlemi dropdown butonlarında yapılacak, burada yapmıyoruz
+      // navigate(`/kulup-paneli/basvuru-duzenle/${yeniBasvuru.id}`);
       
       // Yönlendirmeden sonra başvuruları yenileme fonksiyonunu çağır
       // Bu çağrı asenkron olarak çalışır, ancak yönlendirme tamamlandığı için
       // kullanıcı zaten başka bir sayfada olacaktır
       onRevize();
+      
+      return yeniBasvuru; // Yeni başvuruyu return et
     } catch (error) {
       console.error('Başvuru revize edilirken hata oluştu:', error);
       alert('Başvuru revize edilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
+      return null;
     } finally {
       setIsRevizing(false);
     }
@@ -117,9 +154,63 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
   );
 
   return (
+    <>
+      {/* Belge Notu Popup Modal */}
+      {belgeNotuPopup.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-96 overflow-hidden">
+            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Info className="w-5 h-5" />
+                Belge Notu
+              </h3>
+              <button
+                onClick={handleBelgeNotuKapat}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <h4 className="font-semibold text-gray-700 mb-2">Belge:</h4>
+                <p className="text-gray-900 bg-gray-50 p-3 rounded-lg break-words">
+                  {belgeNotuPopup.belgeAdi}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Not:</h4>
+                <div className="text-gray-900 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                  <p className="whitespace-pre-wrap break-words">
+                    {belgeNotuPopup.belgeNotu || 'Not bulunmuyor.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <button
+                onClick={handleBelgeNotuKapat}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-2">
-        <h3 className="font-medium text-gray-800">{basvuru.etkinlikAdi}</h3>
+        <div className="flex items-center gap-2 flex-1">
+          <h3 className="font-medium text-gray-800">{basvuru.etkinlikAdi}</h3>
+          <button
+            onClick={() => setRevizyonGecmisiAcik(true)}
+            className="flex-shrink-0 p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-full transition-colors"
+            title="Revizyon geçmişini görüntüle"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+        </div>
         {showHeaderStatus && getDurumBilgisi()}
       </div>
 
@@ -265,7 +356,18 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
               const isExpanded = !!expandedGroups[key];
               return (
                 <div key={key} className="flex flex-wrap items-center gap-2 text-xs py-1">
-                  <span className="font-medium text-gray-700">{label}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-700">{label}</span>
+                    {latest.belgeNotu && (
+                      <button
+                        onClick={() => handleBelgeNotuGoster(latest.dosyaAdi || label, latest.belgeNotu)}
+                        className="p-0.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-full flex-shrink-0"
+                        title="Belge notunu gör"
+                      >
+                        <Info className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
                   {latest.isEk && <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">Ek</span>}
                   {count > 1 && (
                     <button
@@ -295,7 +397,18 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
                           : (doc.dosyaAdi || `Belge ${sorted.length - i}`);
                         return (
                           <div key={i} className="flex flex-wrap items-center gap-2 text-[11px]">
-                            <span className="text-gray-600">{timeText}</span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-600">{timeText}</span>
+                              {doc.belgeNotu && (
+                                <button
+                                  onClick={() => handleBelgeNotuGoster(doc.dosyaAdi || timeText, doc.belgeNotu)}
+                                  className="p-0.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-full flex-shrink-0"
+                                  title="Belge notunu gör"
+                                >
+                                  <Info className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
                             <span className={`px-2 py-0.5 rounded ${dCls}`} title={doc.danismanOnay?.redSebebi ? `Red: ${doc.danismanOnay.redSebebi}` : ''}>Danışman: {dStat}</span>
                             <span className={`px-2 py-0.5 rounded ${sCls}`} title={doc.sksOnay?.redSebebi ? `Red: ${doc.sksOnay.redSebebi}` : ''}>SKS: {sStat}</span>
                           </div>
@@ -342,19 +455,40 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
                 <div className="space-y-2">
                   <button
                     className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
-                    onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=belgeler`)}
+                    onClick={async () => {
+                      console.log("🚀 BELGELER REVİZE BAŞLADI!");
+                      setRevizeSecimAcik(false);
+                      const yeniBasvuru = await handleRevize('belgeler');
+                      if (yeniBasvuru) {
+                        navigate(`/kulup-paneli/basvuru-duzenle/${yeniBasvuru.id}?revize=belgeler`);
+                      }
+                    }}
                   >
                     Sadece Belgeler
                   </button>
                   <button
                     className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
-                    onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=etkinlik`)}
+                    onClick={async () => {
+                      console.log("🚀 ETKİNLİK REVİZE BAŞLADI!");
+                      setRevizeSecimAcik(false);
+                      const yeniBasvuru = await handleRevize('etkinlik');
+                      if (yeniBasvuru) {
+                        navigate(`/kulup-paneli/basvuru-duzenle/${yeniBasvuru.id}?revize=etkinlik`);
+                      }
+                    }}
                   >
                     Sadece Etkinlik Bilgileri
                   </button>
                   <button
                     className="w-full text-left px-3 py-2 rounded hover:bg-gray-100 text-sm"
-                    onClick={() => navigate(`/kulup-paneli/basvuru-duzenle/${basvuru.id}?revize=ikisi`)}
+                    onClick={async () => {
+                      console.log("🚀 HER İKİSİ REVİZE BAŞLADI!");
+                      setRevizeSecimAcik(false);
+                      const yeniBasvuru = await handleRevize('ikisi');
+                      if (yeniBasvuru) {
+                        navigate(`/kulup-paneli/basvuru-duzenle/${yeniBasvuru.id}?revize=ikisi`);
+                      }
+                    }}
                   >
                     Etkinlik Bilgileri ve Belgeler
                   </button>
@@ -366,5 +500,14 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
         </div>
       </div>
     </div>
+
+    {/* Revizyon Geçmişi Modal */}
+    <RevizyonGecmisiModal
+      isOpen={revizyonGecmisiAcik}
+      onClose={() => setRevizyonGecmisiAcik(false)}
+      basvuruId={basvuru.id}
+      etkinlikAdi={basvuru.etkinlikAdi}
+    />
+    </>
   );
 };

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, Calendar, X, Search, Eye, LogOut, FileEdit, AlertCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Calendar, X, Search, Eye, LogOut, FileEdit, AlertCircle, Info } from 'lucide-react';
 import { EtkinlikBasvuru } from '../types';
 import { getBasvurular, updateBasvuru, etkinlikBelgeIndir, belgeOnayla, belgeReddet } from '../utils/supabaseStorage';
 import { sendDanismanOnayNotification, sendDanismanRedNotification } from '../utils/emailService';
@@ -37,6 +37,17 @@ export function DanismanEkrani() {
     belgeSayisi: number;
   }[]>([]);
   const [etkinlikVeBelgelerOnayBekleyenler, setEtkinlikVeBelgelerOnayBekleyenler] = useState<EtkinlikBasvuru[]>([]);
+  
+  // Belge notu popup için state'ler
+  const [belgeNotuPopup, setBelgeNotuPopup] = useState<{
+    isOpen: boolean;
+    belgeAdi: string;
+    belgeNotu: string;
+  }>({
+    isOpen: false,
+    belgeAdi: '',
+    belgeNotu: ''
+  });
 
   useEffect(() => {
     const fetchBasvurular = async () => {
@@ -408,6 +419,24 @@ export function DanismanEkrani() {
       console.error('Belge reddetme hatası:', error);
       alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
     }
+  };
+
+  // Belge notunu popup'ta göster
+  const handleBelgeNotuGoster = (belgeAdi: string, belgeNotu: string) => {
+    setBelgeNotuPopup({
+      isOpen: true,
+      belgeAdi,
+      belgeNotu
+    });
+  };
+
+  // Belge notu popup'ını kapat
+  const handleBelgeNotuKapat = () => {
+    setBelgeNotuPopup({
+      isOpen: false,
+      belgeAdi: '',
+      belgeNotu: ''
+    });
   };
 
   const handleLogout = async () => {

@@ -72,7 +72,18 @@ export function KulupPaneli() {
       console.log('Revize edilenler:', revizeEdilenler.length);
       console.log('Revize edilen orijinal başvuru ID\'leri:', [...revizeEdilenBasvuruIdleri]);
       
-      setBasvurular(data);
+      // 🎯 Sadece aktif başvuruları göster (revize edilenlerin eski hallerini gizle)
+      const aktifBasvurular = data.filter(b => {
+        // Eğer bu başvuru revize edilmişse, gösterme (çünkü yeni revize hali var)
+        if (revizeEdilenBasvuruIdleri.has(b.id)) {
+          console.log(`❌ Eski başvuru gizlendi: ${b.id} (${b.etkinlikAdi}) - Revize edilmiş`);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log(`📋 Toplam ${data.length} başvuru → ${aktifBasvurular.length} aktif başvuru gösteriliyor`);
+      setBasvurular(aktifBasvurular);
       setError(null);
     } catch (error) {
       console.error('Başvurular alınırken hata oluştu:', error);
@@ -142,6 +153,12 @@ export function KulupPaneli() {
     const isReddedilmis = isDanisman || isSks; // durum kolonu kaldırıldı
     const isRevizyon = b.revizyon === true;
     const isRevizeEdilmemis = !revizeEdilenBasvuruIdleri.has(b.id);
+    
+    // 🎯 Bu başvuru revize edilmişse gizle (yeni revize hali var)
+    if (revizeEdilenBasvuruIdleri.has(b.id)) {
+      return false;
+    }
+    
     return isReddedilmis && !isRevizyon && isRevizeEdilmemis;
   });
 
@@ -156,10 +173,15 @@ export function KulupPaneli() {
     (b.belgeler && b.belgeler.some(d => !d.sksOnay)) ||
     (b.ekBelgeler && b.ekBelgeler.some(e => !e.sksOnay));
 
-  const revizeGerektirenBasvurular = basvurular.filter(b =>
-    (b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay && hasUnapprovedDocsForDanisman(b)) ||
-    (b.sksOnay?.durum === 'Onaylandı' && hasUnapprovedDocsForSks(b))
-  );
+  const revizeGerektirenBasvurular = basvurular.filter(b => {
+    // 🎯 Bu başvuru revize edilmişse gizle (yeni revize hali var)  
+    if (revizeEdilenBasvuruIdleri.has(b.id)) {
+      return false;
+    }
+    
+    return (b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay && hasUnapprovedDocsForDanisman(b)) ||
+           (b.sksOnay?.durum === 'Onaylandı' && hasUnapprovedDocsForSks(b));
+  });
 
   // Yardımcılar
   const allDocsSksApproved = (b: EtkinlikBasvuru) => {
@@ -174,15 +196,27 @@ export function KulupPaneli() {
   };
 
   // Süreç Tamamlandı: SKS onaylı ve tüm belgeler SKS onaylı (veya hiç belge yok)
-  const surecTamamlandi = basvurular.filter(b => 
-    b.sksOnay?.durum === 'Onaylandı' && allDocsSksApproved(b)
-  );
+  const surecTamamlandi = basvurular.filter(b => {
+    // 🎯 Bu başvuru revize edilmişse gizle (yeni revize hali var)
+    if (revizeEdilenBasvuruIdleri.has(b.id)) {
+      return false;
+    }
+    
+    return b.sksOnay?.durum === 'Onaylandı' && allDocsSksApproved(b);
+  });
 
   // Onay Bekleyenler (tek liste): Reddedilmemiş ve tamamlanmamış tüm başvurular
   const isRejected = (b: EtkinlikBasvuru) =>
     b.danismanOnay?.durum === 'Reddedildi' || b.sksOnay?.durum === 'Reddedildi'; // durum kolonu kaldırıldı
   const isCompleted = (b: EtkinlikBasvuru) => b.sksOnay?.durum === 'Onaylandı' && allDocsSksApproved(b);
-  const onayBekleyenlerBirlesik = basvurular.filter(b => !isRejected(b) && !isCompleted(b));
+  const onayBekleyenlerBirlesik = basvurular.filter(b => {
+    // 🎯 Bu başvuru revize edilmişse gizle (yeni revize hali var)
+    if (revizeEdilenBasvuruIdleri.has(b.id)) {
+      return false;
+    }
+    
+    return !isRejected(b) && !isCompleted(b);
+  });
 
   // Başvuruları filtreleme işlemleri
   useEffect(() => {
@@ -284,6 +318,7 @@ export function KulupPaneli() {
                   key={basvuru.id} 
                   basvuru={basvuru}
                   onRevize={handleRevize}
+                  showDocumentStatuses
                 />
               ))}
               {reddedilenBasvurular.length === 0 && (
@@ -301,7 +336,7 @@ export function KulupPaneli() {
             </h2>
             <div className="space-y-3">
               {surecTamamlandi.map((basvuru) => (
-                <BasvuruKart key={basvuru.id} basvuru={basvuru} onRevize={handleRevize} showDetailedStatuses />
+                <BasvuruKart key={basvuru.id} basvuru={basvuru} onRevize={handleRevize} showDetailedStatuses showDocumentStatuses />
               ))}
               {surecTamamlandi.length === 0 && (
                 <div className="text-center py-8 text-gray-500">Tamamlanan başvuru bulunmamaktadır.</div>

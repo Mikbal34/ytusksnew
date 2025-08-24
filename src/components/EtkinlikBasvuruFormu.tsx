@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Upload } from 'lucide-react';
+import { ArrowLeft, Plus, X, Upload, Info } from 'lucide-react';
 import { EtkinlikBasvuru, Sponsor, Konusmaci, EtkinlikBelge, Kulup } from '../types';
-import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil } from '../utils/supabaseStorage';
+import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil, etkinlikGorseliYukle } from '../utils/supabaseStorage';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
 import { sendEtkinlikBasvuruNotification } from '../utils/emailService';
@@ -46,6 +46,7 @@ const BELGE_TIPLERI: { tip: EtkinlikBelge['tip']; label: string }[] = [
   fakulte: string;
   adresDetay: string;
   aciklama: string;
+  etkinlikGorseli?: File;
 }
 
 type SelectedBelge = { file: File; note: string };
@@ -85,28 +86,7 @@ export function EtkinlikBasvuruFormu() {
   const MIN_EVENT_DATE = '2000-01-01T00:00';
   const MAX_EVENT_DATE = '2100-12-31T23:59';
 
-  // Kullanıcı yazarken yılı 4 karakter ve aralıkta tutmak için normalize edici
-  const normalizeYearInDateTime = (value: string): string => {
-    if (!value) return value;
-    const [datePartRaw, timePartRaw] = value.split('T');
-    const datePart = datePartRaw || '';
-    const dashIndex = datePart.indexOf('-');
-    const rawYear = dashIndex === -1 ? datePart : datePart.slice(0, dashIndex);
-    const restDate = dashIndex === -1 ? '' : datePart.slice(dashIndex); // -MM-DD varsa
 
-    const onlyDigitsYear = (rawYear || '').replace(/\D/g, '').slice(0, 4);
-    if (!onlyDigitsYear) return value;
-
-    let normalizedYear = onlyDigitsYear;
-    if (onlyDigitsYear.length === 4) {
-      const yNum = Math.max(2000, Math.min(2100, parseInt(onlyDigitsYear, 10)));
-      normalizedYear = String(yNum);
-    }
-
-    const normalizedDate = `${normalizedYear}${restDate}`;
-    const normalizedTime = timePartRaw ? timePartRaw.slice(0, 5) : undefined; // HH:MM
-    return normalizedTime ? `${normalizedDate}T${normalizedTime}` : normalizedDate;
-  };
 
   // ISO/timestamp değerlerini datetime-local input formatına çevir (YYYY-MM-DDTHH:mm)
   const toInputDateTime = (value?: string): string => {
@@ -167,6 +147,19 @@ export function EtkinlikBasvuruFormu() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [kulup, setKulup] = useState<Kulup | null>(null);
+  const [mevcutGorsel, setMevcutGorsel] = useState<string | null>(null);
+  
+  // Belge notu popup için state'ler
+  const [belgeNotuPopup, setBelgeNotuPopup] = useState<{
+    isOpen: boolean;
+    belgeAdi: string;
+    belgeNotu: string;
+  }>({
+    isOpen: false,
+    belgeAdi: '',
+    belgeNotu: ''
+  });
+  
   // Revize akışında "Belgeyi Değiştir" için aktif tip bilgisi gerekirse kullanılabilir
   // Ek belge yükleme modal akışı ileride eklenecek
 
@@ -187,6 +180,9 @@ export function EtkinlikBasvuruFormu() {
               adresDetay: basvuru.etkinlikYeri.detay,
               aciklama: basvuru.aciklama
             });
+            if (basvuru.etkinlikGorseli) {
+              setMevcutGorsel(basvuru.etkinlikGorseli);
+            }
             if (basvuru.sponsorlar?.length) {
               setSponsorVarMi(true);
               setSponsorlar(basvuru.sponsorlar);
@@ -430,6 +426,24 @@ export function EtkinlikBasvuruFormu() {
     setSeciliBelgeler(yeniSeciliBelgeler);
   };
 
+  // Belge notunu popup'ta göster
+  const handleBelgeNotuGoster = (belgeAdi: string, belgeNotu: string) => {
+    setBelgeNotuPopup({
+      isOpen: true,
+      belgeAdi,
+      belgeNotu
+    });
+  };
+
+  // Belge notu popup'ını kapat
+  const handleBelgeNotuKapat = () => {
+    setBelgeNotuPopup({
+      isOpen: false,
+      belgeAdi: '',
+      belgeNotu: ''
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -502,9 +516,18 @@ export function EtkinlikBasvuruFormu() {
       }
 
       console.log('Başvuru oluşturuluyor, kulüp:', kulup);
+      console.log('FormData etkinlikGorseli:', formData.etkinlikGorseli ? 'VAR' : 'YOK');
+      if (formData.etkinlikGorseli) {
+        console.log('Görsel dosya adı:', formData.etkinlikGorseli.name);
+        console.log('Görsel dosya boyutu:', formData.etkinlikGorseli.size);
+        console.log('Görsel dosya tipi:', formData.etkinlikGorseli.type);
+      }
       
-      // Yeni başvuru oluştur
-      const yeniBasvuru: EtkinlikBasvuru = {
+              // Debug: Mevcut başvuru revizyon durumunu logla
+        console.log('🔍 Submit Debug - Mevcut başvuru revizyon durumu:', mevcutBasvuru?.revizyon);
+        
+        // Yeni başvuru oluştur
+        const yeniBasvuru: EtkinlikBasvuru = {
         id: mevcutBasvuru?.id || '',
         kulupId: kulup.id,
         kulupAdi: kulup.isim,
@@ -520,8 +543,8 @@ export function EtkinlikBasvuruFormu() {
         zamanDilimleri,
         aciklama: formData.aciklama,
          durum: 'Beklemede',
-         // Revize edildiğinde tekrar danışman onayına düşmesi için revizyon bayrağı true
-         revizyon: true,
+         // Sadece gerçek revizyonlar için revizyon bayrağı true - mevcut durumu koru
+         revizyon: !!mevcutBasvuru?.revizyon,
         sponsorlar: sponsorlar.map(s => ({
           firmaAdi: s.firmaAdi,
           detay: s.detay
@@ -573,6 +596,38 @@ export function EtkinlikBasvuruFormu() {
         return;
       }
       
+      // Etkinlik görseli varsa yükle
+      let gorselYolu: string | null = null;
+      if (formData.etkinlikGorseli) {
+        try {
+          console.log('Etkinlik görseli yükleniyor...');
+          const kulupSlug = toSlug(kulup.isim);
+          const etkinlikSlug = toSlug(formData.etkinlikAdi);
+          const tarih = formatTodayDDMMYYYY();
+          const gorselAdi = `${kulupSlug}_${etkinlikSlug}_gorsel_${tarih}.${formData.etkinlikGorseli.name.split('.').pop()}`;
+          
+          gorselYolu = await etkinlikGorseliYukle({
+            dosya: formData.etkinlikGorseli,
+            dosyaAdi: gorselAdi,
+            basvuruId
+          });
+          
+          if (gorselYolu) {
+            console.log('Etkinlik görseli yüklendi:', gorselYolu);
+            // Başvuruya görsel yolunu ekle
+            yeniBasvuru.etkinlikGorseli = gorselYolu;
+            console.log('🔍 UpdateBasvuru çağrılmadan önce revizyon durumu:', yeniBasvuru.revizyon);
+            console.log('Başvuru güncelleniyor, yeni başvuru objesi:', yeniBasvuru);
+            const guncellenmisSonuc = await updateBasvuru(yeniBasvuru);
+            console.log('Başvuru güncelleme sonucu:', guncellenmisSonuc);
+          }
+        } catch (gorselError) {
+          console.error('Etkinlik görseli yüklenirken hata:', gorselError);
+          setError(`Etkinlik görseli yüklenemedi: ${gorselError instanceof Error ? gorselError.message : 'Bilinmeyen hata'}. Ancak başvuru kaydedildi.`);
+          // Görsel yüklenemese bile işleme devam et
+        }
+      }
+      
       // Belgeleri yükle
       const yuklenenBelgePaths: EtkinlikBelge[] = [];
       for (const tip of Object.keys(belgeler)) {
@@ -593,7 +648,8 @@ export function EtkinlikBasvuruFormu() {
               dosya: file,
               dosyaAdi,
               tip,
-              basvuruId
+              basvuruId,
+              belgeNotu: items[i].note || undefined // Not bilgisini ekle
             });
             if (dosyaYolu) {
               yuklenenBelgePaths.push({
@@ -628,6 +684,7 @@ export function EtkinlikBasvuruFormu() {
                 ...yuklenenBelgePaths,
               ],
             } as EtkinlikBasvuru;
+            console.log('🔍 Birleşik başvuru revizyon durumu:', birlesik.revizyon);
             await updateBasvuru(birlesik);
           } else {
             // Yeni başvuru durumunda da yüklenen belgeleri database'e kaydet
@@ -637,6 +694,7 @@ export function EtkinlikBasvuruFormu() {
               id: basvuruId,
               belgeler: yuklenenBelgePaths,
             } as EtkinlikBasvuru;
+            console.log('🔍 Belgeli başvuru revizyon durumu:', belgeliBasvuru.revizyon);
             await updateBasvuru(belgeliBasvuru);
             console.log('✅ Belgeler başarıyla eklendi');
           }
@@ -704,6 +762,51 @@ export function EtkinlikBasvuruFormu() {
   }
 
   return (
+    <>
+      {/* Belge Notu Popup Modal */}
+      {belgeNotuPopup.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-96 overflow-hidden">
+            <div className="bg-blue-600 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Info className="w-5 h-5" />
+                Belge Notu
+              </h3>
+              <button
+                onClick={handleBelgeNotuKapat}
+                className="text-white hover:text-gray-200 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="mb-4">
+                <h4 className="font-semibold text-gray-700 mb-2">Belge:</h4>
+                <p className="text-gray-900 bg-gray-50 p-3 rounded-lg break-words">
+                  {belgeNotuPopup.belgeAdi}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-700 mb-2">Not:</h4>
+                <div className="text-gray-900 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
+                  <p className="whitespace-pre-wrap break-words">
+                    {belgeNotuPopup.belgeNotu || 'Not bulunmuyor.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <button
+                onClick={handleBelgeNotuKapat}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8">
       <button
         onClick={() => navigate('/kulup-paneli')}
@@ -1078,6 +1181,39 @@ export function EtkinlikBasvuruFormu() {
                 </div>
               </div>
 
+              {/* Etkinlik Görseli */}
+              <div>
+                <label htmlFor="etkinlikGorseli" className="block text-sm font-medium text-gray-700 mb-1">
+                  Etkinlik Görseli
+                </label>
+                <div className="text-xs text-gray-500 mb-2">
+                  300x300 ile 2048x2048 pixel arasında, maksimum 5MB, JPG/JPEG/PNG formatında
+                </div>
+                <input
+                  type="file"
+                  id="etkinlikGorseli"
+                  accept="image/jpeg,image/jpg,image/png"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setFormData({...formData, etkinlikGorseli: file || undefined});
+                  }}
+                  disabled={isAdvisorApproved && !etkinlikRevizeModu}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                {/* Mevcut görsel bilgisi */}
+                {mevcutGorsel && !formData.etkinlikGorseli && (
+                  <div className="mt-2 text-sm text-blue-600">
+                    Mevcut görsel: {mevcutGorsel.split('/').pop()}
+                  </div>
+                )}
+                {/* Yeni seçilen görsel */}
+                {formData.etkinlikGorseli && (
+                  <div className="mt-2 text-sm text-green-600">
+                    Yeni seçilen görsel: {formData.etkinlikGorseli.name}
+                  </div>
+                )}
+              </div>
+
               <div>
               <label htmlFor="aciklama" className="block text-sm font-medium text-gray-700 mb-1">
                 Etkinlik Açıklaması <span className="text-red-600">*</span>
@@ -1149,12 +1285,24 @@ export function EtkinlikBasvuruFormu() {
                                   <div key={idx} className={`flex items-center justify-between border rounded-md px-3 py-2 text-xs ${cls}`}>
                                     <div className="min-w-0">
                                       <div className="truncate text-gray-800 font-medium">{b.dosyaAdi}</div>
+                                      {/* Belge notu kaldırıldı - artık popup'ta gösterilecek */}
                                       <div className="mt-1 flex flex-wrap gap-1.5">
                                         <span className={`px-2 py-0.5 rounded ${pillCls('danisman')}`}>Danışman: {b.danismanOnay?.durum || 'Bekliyor'}</span>
                                         <span className={`px-2 py-0.5 rounded ${pillCls('sks')}`}>SKS: {b.sksOnay?.durum || 'Bekliyor'}</span>
                                       </div>
                                     </div>
                                       <div className="flex items-center gap-2">
+                                        {/* Info butonu - belge notu varsa göster */}
+                                        {b.belgeNotu && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleBelgeNotuGoster(b.dosyaAdi, b.belgeNotu || '')}
+                                            className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-full"
+                                            title="Belge notunu gör"
+                                          >
+                                            <Info className="w-4 h-4" />
+                                          </button>
+                                        )}
                                        <button type="button" onClick={() => handleBelgeDegistirSec(tip)} className="text-blue-600 hover:text-blue-700">Belgeyi Değiştir</button>
                                        {/* Gizli input (sadece değiştir akışı için) */}
                                        <input
@@ -1213,7 +1361,7 @@ export function EtkinlikBasvuruFormu() {
                                 value={geciciNot[tip] || ''}
                                 onChange={(e) => setGeciciNot(prev => ({ ...prev, [tip]: e.target.value }))}
                                 disabled={isAdvisorApproved && !belgelerRevizeModu}
-                                placeholder={tip === 'AfisBasim' ? 'Afiş talebi hakkında not...' : 'Belge ile ilgili not...'}
+                                placeholder={tip === 'AfisBasim' ? 'Afiş talebi hakkında not ekleyin (opsiyonel)' : 'Belge ile ilgili not ekleyin (opsiyonel)'}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                               />
                             </div>
@@ -1224,8 +1372,20 @@ export function EtkinlikBasvuruFormu() {
                           <div className="space-y-1">
                             {belgeler[tip].map((item, idx) => (
                               <div key={idx} className="flex items-center justify-between bg-gray-50 px-3 py-1 rounded">
-                                <span className="text-sm text-gray-700 truncate">{item.file.name}{item.note ? ` — ${item.note}` : ''}</span>
-                                <button type="button" onClick={() => handleBelgeSil(tip, idx)} className="text-red-600 hover:text-red-700 text-xs">Kaldır</button>
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <span className="text-sm text-gray-700 truncate">{item.file.name}</span>
+                                  {item.note && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleBelgeNotuGoster(item.file.name, item.note)}
+                                      className="p-0.5 text-blue-500 hover:text-blue-700 hover:bg-blue-100 rounded-full flex-shrink-0"
+                                      title="Belge notunu gör"
+                                    >
+                                      <Info className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                                <button type="button" onClick={() => handleBelgeSil(tip, idx)} className="text-red-600 hover:text-red-700 text-xs ml-2">Kaldır</button>
                               </div>
                             ))}
                           </div>
@@ -1255,5 +1415,6 @@ export function EtkinlikBasvuruFormu() {
         </div>
       </div>
     </div>
+    </>
   );
 }

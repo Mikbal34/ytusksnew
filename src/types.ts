@@ -22,6 +22,7 @@ export interface EtkinlikBelge {
   tip: 'Afiş' | 'KatilimciListesi' | 'KumanyaTalep' | 'AracIstek' | 'AfisBasim' | 'Diger';
   dosya: string | File; // Base64 encoded PDF or File object
   dosyaAdi: string;
+  belgeNotu?: string; // Kullanıcının bıraktığı not
   danismanOnay?: OnayDurumu;
   sksOnay?: OnayDurumu;
   durum?: 'Beklemede' | 'Onaylandı' | 'Reddedildi'; // Backward compatibility
@@ -71,6 +72,7 @@ export interface EtkinlikBasvuru {
   sponsorlar?: Sponsor[];
   konusmacilar?: Konusmaci[];
   aciklama: string;
+  etkinlikGorseli?: string; // Storage bucket yolu (1080x1080 pixel)
   belgeler?: EtkinlikBelge[];
   ekBelgeler?: EkBelge[];
   revizyon: boolean;
@@ -98,6 +100,32 @@ export interface KulupBaskani {
   adSoyad: string;
   eposta: string;
   telefon: string;
+}
+
+export interface EtkinlikRevizyonGecmisi {
+  id: string;
+  basvuru_id: string;
+  revizyon_numarasi: number;
+  revizyon_tarihi: string;
+  revizyon_turu: 'belgeler' | 'etkinlik' | 'ikisi';
+  revizyon_yapan_id?: string;
+  revizyon_aciklamasi?: string;
+  eski_etkinlik_adi: string;
+  eski_aciklama?: string;
+  eski_etkinlik_turu?: string;
+  eski_diger_turu_aciklama?: string;
+  eski_etkinlik_yeri?: {
+    fakulte: string;
+    detay: string;
+  };
+  eski_zaman_dilimleri?: Array<{ baslangic: string; bitis: string }>;
+  eski_danisman_onay?: OnayDurumu;
+  eski_sks_onay?: OnayDurumu;
+  eski_etkinlik_gorseli?: string;
+  degisen_alanlar?: {
+    [key: string]: any;
+  };
+  created_at: string;
 }
 
 export interface Kulup {

@@ -14,20 +14,25 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
     console.log('updateBasvuru: admin client ile yazma işlemi');
     
     // Ana başvuru bilgilerini ekle - JSONB onay sistemi
+    console.log('SaveBasvuru - etkinlik_gorseli değeri:', basvuru.etkinlikGorseli);
+    const insertData = {
+      kulup_id: basvuru.kulupId,
+      etkinlik_adi: basvuru.etkinlikAdi,
+      etkinlik_turu: basvuru.etkinlikTuru || null,
+      diger_turu_aciklama: basvuru.digerTuruAciklama || null,
+      etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
+      etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
+      // Legacy tarih alanları artık kaydedilmeyecek - sadece zaman dilimleri kullanılacak
+      aciklama: basvuru.aciklama,
+      etkinlik_gorseli: basvuru.etkinlikGorseli || null,
+      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
+      revizyon: !!basvuru.revizyon
+    };
+    console.log('SaveBasvuru - gönderilen data:', insertData);
+    
     const { data: basvuruData, error: basvuruError } = await client
       .from('etkinlik_basvurulari')
-      .insert({
-        kulup_id: basvuru.kulupId,
-        etkinlik_adi: basvuru.etkinlikAdi,
-        etkinlik_turu: basvuru.etkinlikTuru || null,
-        diger_turu_aciklama: basvuru.digerTuruAciklama || null,
-        etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
-        etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
-        // Legacy tarih alanları artık kaydedilmeyecek - sadece zaman dilimleri kullanılacak
-        aciklama: basvuru.aciklama,
-        // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
-        revizyon: !!basvuru.revizyon
-      })
+      .insert(insertData)
       .select()
       .single();
     
@@ -120,7 +125,8 @@ export const saveBasvuru = async (basvuru: EtkinlikBasvuru) => {
           basvuru_id: basvuruId,
           tip: belge.tip,
           dosya_adi: belge.dosyaAdi,
-          dosya_yolu: dosyaYolu
+          dosya_yolu: dosyaYolu,
+          belge_notu: belge.belgeNotu || null
           // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
         });
       }
@@ -199,6 +205,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
             tip: belge.tip,
             dosya: belge.dosya_yolu,
             dosyaAdi: belge.dosya_adi,
+            belgeNotu: belge.belge_notu || undefined,
             // JSONB onay bilgileri direkt olarak
             danismanOnay: belge.danisman_onay,
             sksOnay: belge.sks_onay
@@ -282,6 +289,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
         bitisTarihi: basvuru.bitis_tarihi,
           zamanDilimleri,
         aciklama: basvuru.aciklama,
+        etkinlikGorseli: basvuru.etkinlik_gorseli || undefined,
         sponsorlar: sponsorlar,
         konusmacilar: konusmacilar,
         belgeler: belgeler,
@@ -519,20 +527,25 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
     
     // Ana başvuru bilgilerini güncelle
-    const { error: basvuruError } = await client
+    console.log('UpdateBasvuru - etkinlik_gorseli değeri:', basvuru.etkinlikGorseli);
+    const updateData = {
+      etkinlik_adi: basvuru.etkinlikAdi,
+      etkinlik_turu: basvuru.etkinlikTuru || null,
+      diger_turu_aciklama: basvuru.digerTuruAciklama || null,
+      etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
+      etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
+      // Legacy tarih alanları artık güncellenmeyecek - sadece zaman dilimleri kullanılacak
+      aciklama: basvuru.aciklama,
+      etkinlik_gorseli: basvuru.etkinlikGorseli || null,
+      revizyon: basvuru.revizyon
+      // JSONB onay alanları kaldırıldı - artık sadece onay_gecmisi kullanılıyor
+    };
+    console.log('🔍 UpdateBasvuru - gönderilen revizyon durumu:', updateData.revizyon);
+    console.log('UpdateBasvuru - gönderilen data:', updateData);
+    
+    const { data: updateResult, error: basvuruError } = await client
       .from('etkinlik_basvurulari')
-      .update({
-        etkinlik_adi: basvuru.etkinlikAdi,
-        etkinlik_turu: basvuru.etkinlikTuru || null,
-        diger_turu_aciklama: basvuru.digerTuruAciklama || null,
-        etkinlik_fakulte: basvuru.etkinlikYeri.fakulte,
-        etkinlik_yeri_detay: basvuru.etkinlikYeri.detay,
-        // Legacy tarih alanları artık güncellenmeyecek - sadece zaman dilimleri kullanılacak
-        aciklama: basvuru.aciklama,
-
-        revizyon: basvuru.revizyon
-        // JSONB onay alanları kaldırıldı - artık sadece onay_gecmisi kullanılıyor
-      })
+      .update(updateData)
       .eq('id', basvuru.id)
       .select();
     
@@ -540,6 +553,9 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       console.error('Başvuru güncellenirken hata:', basvuruError);
       throw basvuruError;
     }
+    
+    console.log('🔍 UpdateBasvuru - güncelleme sonrası revizyon durumu:', updateResult?.[0]?.revizyon);
+    console.log('UpdateBasvuru - güncelleme başarılı:', updateResult);
     
     // Onay bilgilerini güncelle
     // Zaman dilimlerini güncelle (tam yenileme)
@@ -964,234 +980,206 @@ export const getKulupler = async (): Promise<Kulup[]> => {
   }
 };
 
-export const revizeEt = async (basvuru: EtkinlikBasvuru): Promise<EtkinlikBasvuru> => {
+export const revizeEt = async (basvuru: EtkinlikBasvuru, revizeTuru?: 'belgeler' | 'etkinlik' | 'ikisi'): Promise<EtkinlikBasvuru> => {
   try {
-    console.log(`ID: ${basvuru.id} olan başvuru revize ediliyor...`);
+    console.log(`🔄 ID: ${basvuru.id} olan başvuru IN-PLACE revize ediliyor...`);
+    console.log(`🎯 Revize türü: ${revizeTuru || 'varsayılan (ikisi)'}`);
     
-    // Önce kullanıcının oturum bilgilerini kontrol et
+    // Kullanıcı session bilgilerini al
     const { data: sessionData } = await supabase.auth.getSession();
+    // Revizyon işlemi için admin client kullan - RLS bypass gerekli
+    const client = supabaseAdmin;
+    const kullaniciId = sessionData.session?.user?.id;
     
-    // Eğer oturum yoksa, admin client'ı kullan
-    const client = sessionData.session ? supabase : supabaseAdmin;
-    console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
+    // 1️⃣ ÖNCE REVİZYON GEÇMİŞİNE KAYDET (Eski durumu sakla)
+    await saveRevisionHistory(basvuru, revizeTuru, kullaniciId);
     
-    // Orijinal başvuruyu veritabanından tazele (özellikle etkinlik_turu ve zaman dilimleri için)
-    let orijinal = basvuru;
-    try {
-      const fetched = await getBasvuruById(basvuru.id);
-      if (fetched) {
-        orijinal = fetched;
-      }
-    } catch (e) {
-      console.warn('Orijinal başvuru DB üzerinden getirilemedi, mevcut nesne kullanılacak.', e);
+    // 2️⃣ REVIZE TÜRÜNE GÖRE ONAY DURUMLARI BELİRLE
+    let updateData: any = {
+      revizyon: true,
+      // Diğer alanlar kullanıcı tarafından değiştirilecek (EtkinlikBasvuruFormu'nda)
+    };
+    
+    if (revizeTuru === 'belgeler') {
+      // ✅ Sadece belgeler değişiyor -> Etkinlik onaylarını KORU
+      console.log('✅ Etkinlik onayları korunuyor (sadece belgeler revize)');
+      // danisman_onay ve sks_onay değiştirilmez (korunur)
+    } else if (revizeTuru === 'etkinlik') {
+      // ❌ Sadece etkinlik değişiyor -> Etkinlik onaylarını SIFIRLA
+      updateData.danisman_onay = null;
+      updateData.sks_onay = null;
+      console.log('❌ Etkinlik onayları sıfırlanıyor (etkinlik bilgileri revize)');
+    } else {
+      // ❌ Her ikisi değişiyor -> Her şeyi SIFIRLA
+      updateData.danisman_onay = null;
+      updateData.sks_onay = null;
+      console.log('❌ Tüm onaylar sıfırlanıyor (her ikisi revize)');
     }
-
-    // Yeni başvuru ID'si oluştur (geçici, DB ekledikten sonra gerçek ID alınır)
-    const yeniId = Date.now().toString();
     
-    // Yeni başvuru objesi oluştur
-    const yeniBasvuru: EtkinlikBasvuru = {
-      ...basvuru,
-      id: yeniId,
-      revizyon: true,
-      danismanOnay: undefined, // Danışman onayını null yap (yeniden onay gerekir)
-      sksOnay: undefined, // SKS onayını null yap (yeniden onay gerekir)
-      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
-      onayGecmisi: {
-        // Onay geçmişini taşı, ama yeni bir onay gerektiğini belirterek
-        danismanOnaylari: [...(basvuru.onayGecmisi?.danismanOnaylari || [])],
-        sksOnaylari: [...(basvuru.onayGecmisi?.sksOnaylari || [])]
-      }
-    };
+    // 3️⃣ MEVCUT BAŞVURUYU IN-PLACE GÜNCELLE (ID değişmez!)
+    console.log('🔄 Admin client ile güncelleme yapılıyor:', updateData);
+    console.log('🔍 Güncellenecek başvuru ID:', basvuru.id);
     
-    // Yeni başvuruyu veritabanına ekle
-    const revizeObjesi = {
-      kulup_id: yeniBasvuru.kulupId,
-      etkinlik_adi: yeniBasvuru.etkinlikAdi,
-      etkinlik_turu: orijinal.etkinlikTuru || yeniBasvuru.etkinlikTuru || null,
-      diger_turu_aciklama: orijinal.digerTuruAciklama || yeniBasvuru.digerTuruAciklama || null,
-      etkinlik_fakulte: yeniBasvuru.etkinlikYeri.fakulte,
-      etkinlik_yeri_detay: yeniBasvuru.etkinlikYeri.detay,
-      baslangic_tarihi: orijinal.baslangicTarihi || yeniBasvuru.baslangicTarihi,
-      bitis_tarihi: orijinal.bitisTarihi || yeniBasvuru.bitisTarihi,
-      aciklama: yeniBasvuru.aciklama,
-      // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
-      revizyon: true,
-      orijinal_basvuru_id: basvuru.id // Orijinal başvurunun ID'sini kaydediyoruz
-    };
-    
-    console.log("Revize başvuru oluşturuluyor:", revizeObjesi);
-    
-    const { data: basvuruData, error: basvuruError } = await client
+    // Önce başvurunun varlığını kontrol et
+    const { data: existingCheck, error: checkError } = await client
       .from('etkinlik_basvurulari')
-      .insert(revizeObjesi)
-      .select()
-      .single();
-    
-    if (basvuruError) {
-      console.error('Revize başvuru oluşturulurken hata:', basvuruError);
-      throw basvuruError;
+      .select('id, kulup_id, revizyon')
+      .eq('id', basvuru.id);
+      
+    if (checkError) {
+      console.error('❌ Başvuru varlık kontrolü hatası:', checkError);
+      throw new Error(`Başvuru kontrol edilemedi: ${checkError.message}`);
     }
     
-    console.log('Eklenen başvuru verisi:', basvuruData);
-    console.log('Revizyon durumu:', basvuruData.revizyon);
-    
-    const yeniBasvuruId = basvuruData.id;
-    console.log('Yeni revize başvuru oluşturuldu, ID:', yeniBasvuruId);
-    
-    // Orijinal başvurunun zaman dilimlerini kopyala
-    try {
-      const kopyalanacakDilimler = (orijinal.zamanDilimleri && orijinal.zamanDilimleri.length > 0)
-        ? orijinal.zamanDilimleri
-        : ((orijinal.baslangicTarihi && orijinal.bitisTarihi)
-            ? [{ baslangic: orijinal.baslangicTarihi, bitis: orijinal.bitisTarihi }]
-            : []);
-
-      if (kopyalanacakDilimler.length > 0) {
-        const insertRows = kopyalanacakDilimler
-          .filter(z => !!z.baslangic && !!z.bitis)
-          .map(z => ({ basvuru_id: yeniBasvuruId, baslangic: z.baslangic, bitis: z.bitis }));
-        if (insertRows.length > 0) {
-          const { error: zdInsErr } = await supabaseAdmin
-            .from('etkinlik_zaman_dilimleri')
-            .insert(insertRows);
-          if (zdInsErr) {
-            console.error('Revize için zaman dilimleri kopyalanırken hata:', zdInsErr);
-          }
-        }
-      }
-    } catch (zdCopyErr) {
-      console.error('Zaman dilimleri kopyalama sırasında beklenmeyen hata:', zdCopyErr);
-    }
-
-    // Sponsorlar varsa kopyala
-    if (basvuru.sponsorlar && basvuru.sponsorlar.length > 0) {
-      const sponsorVerileri = basvuru.sponsorlar.map(sponsor => ({
-        basvuru_id: yeniBasvuruId,
-        firma_adi: sponsor.firmaAdi,
-        detay: sponsor.detay
-      }));
-      
-      const { error: sponsorError } = await client
-        .from('sponsorlar')
-        .insert(sponsorVerileri);
-      
-      if (sponsorError) {
-        console.error('Sponsorlar kopyalanırken hata:', sponsorError);
-        throw sponsorError;
-      }
+    console.log('✅ Başvuru varlık kontrolü:', existingCheck);
+    if (!existingCheck || existingCheck.length === 0) {
+      throw new Error(`Başvuru bulunamadı: ${basvuru.id}`);
     }
     
-    // Konuşmacılar varsa kopyala
-    if (basvuru.konusmacilar && basvuru.konusmacilar.length > 0) {
-      const konusmaciVerileri = basvuru.konusmacilar.map(konusmaci => ({
-        basvuru_id: yeniBasvuruId,
-        ad_soyad: konusmaci.adSoyad,
-        ozgecmis: konusmaci.ozgecmis,
-        aciklama: konusmaci.aciklama
-      }));
-      
-      const { error: konusmaciError } = await client
-        .from('konusmacilar')
-        .insert(konusmaciVerileri);
-      
-      if (konusmaciError) {
-        console.error('Konuşmacılar kopyalanırken hata:', konusmaciError);
-        throw konusmaciError;
-      }
+    const { data: updateResult, error: updateError } = await client
+      .from('etkinlik_basvurulari')
+      .update(updateData)
+      .eq('id', basvuru.id)
+      .select('*');
+    
+    if (updateError) {
+      console.error('❌ Başvuru güncellenirken hata:', updateError);
+      console.error('❌ Hata kodu:', updateError.code);
+      console.error('❌ Hata mesajı:', updateError.message);
+      console.error('❌ Hata detayları:', updateError.details);
+      throw updateError;
     }
     
-    // Belgeler varsa kopyala (JSONB onay sistemi ile)
-    if (basvuru.belgeler && basvuru.belgeler.length > 0) {
-      console.log(`🔄 ${basvuru.belgeler.length} belge revizyon için kontrol ediliyor...`);
+    console.log('✅ Update sonucu:', updateResult);
+    console.log('✅ Etkilenen satır sayısı:', updateResult?.length || 0);
+    
+    if (!updateResult || updateResult.length === 0) {
+      console.error('❌ Hiçbir satır güncellenmedi! RLS politikası sorunu olabilir.');
+      throw new Error('Başvuru güncellenemedi: Hiçbir satır etkilenmedi. RLS politikası kontrol edilmeli.');
+    }
+    
+    console.log('✅ Başvuru in-place güncellendi (ID aynı kaldı):', basvuru.id);
+    
+    // 4️⃣ BELGE ONAYLARINI REVIZE TÜRÜNE GÖRE AYARLA
+    if (revizeTuru !== 'belgeler') {
+      // Belgeler değişecek -> Belge onaylarını sıfırla
+      const belgeUpdateData = {
+        danisman_onay: null,
+        sks_onay: null
+      };
       
-      // Tam onaylanmamış belgeleri taşı (JSONB sistemine uygun)
-      const tasinacakBelgeler = basvuru.belgeler.filter(belge => {
-        const tamOnaylanmis = belge.danismanOnay?.durum === 'Onaylandı' && 
-                             belge.sksOnay?.durum === 'Onaylandı';
-        
-        if (tamOnaylanmis) {
-          console.log(`📋 ${belge.tip} belgesi tam onaylanmış, yeni revizyon için taşınmayacak`);
-        } else {
-          console.log(`📋 ${belge.tip} belgesi taşınacak:`, {
-            danisman: belge.danismanOnay?.durum || 'beklemede',
-            sks: belge.sksOnay?.durum || 'beklemede'
-          });
-        }
-        
-        return !tamOnaylanmis;
-      });
+      // Etkinlik belgelerini güncelle
+      const { error: belgeUpdateError } = await client
+        .from('etkinlik_belgeleri')
+        .update(belgeUpdateData)
+        .eq('basvuru_id', basvuru.id);
       
-      if (tasinacakBelgeler.length > 0) {
-        console.log(`💾 ${tasinacakBelgeler.length} belge revize başvuruya kopyalanıyor...`);
-        
-        const belgeVerileri = tasinacakBelgeler.map(belge => ({
-          basvuru_id: yeniBasvuruId,
-          tip: belge.tip,
-          dosya_adi: belge.dosyaAdi,
-          dosya_yolu: belge.dosya,
-          // Onay bilgilerini sıfırla - yeni revizyon için yeniden onay gerekir
-          danisman_onay: null,
-          sks_onay: null
-        }));
-        
-        const { error: belgeError } = await client
-          .from('etkinlik_belgeleri')
-          .insert(belgeVerileri);
-          
-        if (belgeError) {
-          console.error('Etkinlik belgeleri kopyalanırken hata:', belgeError);
-          throw belgeError;
-        }
-        
-        console.log(`✅ ${tasinacakBelgeler.length} belge başarıyla kopyalandı`);
+      if (belgeUpdateError) {
+        console.error('⚠️ Belge onayları sıfırlanırken hata:', belgeUpdateError);
+        // Bu kritik bir hata değil, devam et
       } else {
-        console.log('📋 Tüm belgeler onaylanmış, yeni revizyon için belge kopyalanmadı');
+        console.log('❌ Etkinlik belgesi onayları sıfırlandı');
       }
-    }
-
-    // Ek belgeler varsa kopyala (JSONB onay sistemi ile)
-    if (basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0) {
-      console.log(`🔄 ${basvuru.ekBelgeler.length} ek belge revizyon için kopyalanıyor...`);
       
-      const ekBelgeVerileri = basvuru.ekBelgeler.map(ek => ({
-        etkinlik_id: yeniBasvuruId,
-        tip: ek.tip,
-        dosya_adi: ek.dosyaAdi,
-        dosya_yolu: ek.dosya,
-        olusturma_tarihi: ek.olusturmaTarihi || new Date().toISOString(),
-        aciklama: ek.aciklama || null,
-        // Onay bilgilerini koru - ek belgeler revizyon sırasında onayları korunabilir
-        danisman_onay: ek.danismanOnay || null,
-        sks_onay: ek.sksOnay || null
-        // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
-      }));
-
-      const { error: ekBelgeError } = await client
+      // Ek belgeleri güncelle  
+      const { error: ekBelgeUpdateError } = await client
         .from('ek_belgeler')
-        .insert(ekBelgeVerileri);
-
-      if (ekBelgeError) {
-        console.error('Ek belgeler kopyalanırken hata:', ekBelgeError);
-        throw ekBelgeError;
+        .update(belgeUpdateData)
+        .eq('etkinlik_id', basvuru.id);
+      
+      if (ekBelgeUpdateError) {
+        console.error('⚠️ Ek belge onayları sıfırlanırken hata:', ekBelgeUpdateError);
+        // Bu kritik bir hata değil, devam et
+      } else {
+        console.log('❌ Ek belge onayları sıfırlandı');
       }
+    } else {
+      console.log('✅ Belge onayları korundu (sadece belgeler revize değil)');
     }
     
-    console.log('Revize başvuru veritabanına kaydedildi, onay geçmişi temizlendi');
-    console.log('Bu başvuru danışman onayına düşecek');
+    // 5️⃣ GÜNCEL BAŞVURUYU AL VE RETURN ET
+    const güncelBasvuru = await getBasvuruById(basvuru.id);
+    if (!güncelBasvuru) {
+      throw new Error('Revize edilen başvuru DB\'den alınamadı');
+    }
     
-    // Yeni başvuru ID'sini güncelle
-    yeniBasvuru.id = yeniBasvuruId;
-    console.log('Başvuru başarıyla revize edildi. Revizyon durumu:', yeniBasvuru.revizyon);
-    console.log(`REVİZE EDİLEN BAŞVURU: ${yeniBasvuruId} (Orijinal ID: ${basvuru.id})`);
+    console.log('🎉 Başvuru başarıyla IN-PLACE revize edildi! ID:', basvuru.id);
+    console.log('📊 Revizyon durumu:', güncelBasvuru.revizyon);
+    console.log('👨‍🏫 Danışman onayı:', güncelBasvuru.danismanOnay?.durum || 'Yok');
+    console.log('🏢 SKS onayı:', güncelBasvuru.sksOnay?.durum || 'Yok');
     
-    return yeniBasvuru;
+    return güncelBasvuru;
     
   } catch (error) {
-    console.error('Başvuru revize edilirken hata oluştu:', error);
+    console.error('❌ IN-PLACE revize işleminde hata oluştu:', error);
     throw error;
   }
 };
+
+// 📚 Revizyon geçmişi kaydetme fonksiyonu
+async function saveRevisionHistory(
+  basvuru: EtkinlikBasvuru, 
+  revizeTuru: string | undefined, 
+  kullaniciId: string | undefined
+) {
+  try {
+    const client = supabaseAdmin; // Admin yetkisi ile kaydet
+    
+    // Mevcut revizyon sayısını al
+    const { count } = await client
+      .from('etkinlik_revizyon_gecmisi')
+      .select('id', { count: 'exact', head: true })
+      .eq('basvuru_id', basvuru.id);
+    
+    const revizyonNumarasi = (count || 0) + 1;
+    
+    // Hangi alanların değişeceğini belirle
+    const degisenAlanlar: string[] = [];
+    if (revizeTuru === 'belgeler') {
+      degisenAlanlar.push('belgeler');
+    } else if (revizeTuru === 'etkinlik') {
+      degisenAlanlar.push('etkinlik_adi', 'aciklama', 'etkinlik_yeri', 'zaman_dilimleri');
+    } else {
+      degisenAlanlar.push('etkinlik_adi', 'aciklama', 'etkinlik_yeri', 'zaman_dilimleri', 'belgeler');
+    }
+    
+    const gecmisKaydi = {
+      basvuru_id: basvuru.id,
+      revizyon_numarasi: revizyonNumarasi,
+      revizyon_turu: revizeTuru || 'ikisi',
+      revizyon_yapan_id: kullaniciId,
+      revizyon_aciklamasi: `${revizeTuru || 'ikisi'} revize edildi`,
+      
+      // Eski değerleri kaydet
+      eski_etkinlik_adi: basvuru.etkinlikAdi,
+      eski_aciklama: basvuru.aciklama,
+      eski_etkinlik_turu: basvuru.etkinlikTuru,
+      eski_diger_turu_aciklama: basvuru.digerTuruAciklama,
+      eski_etkinlik_yeri: basvuru.etkinlikYeri,
+      eski_zaman_dilimleri: basvuru.zamanDilimleri,
+      eski_danisman_onay: basvuru.danismanOnay,
+      eski_sks_onay: basvuru.sksOnay,
+      eski_etkinlik_gorseli: basvuru.etkinlikGorseli,
+      
+      degisen_alanlar: degisenAlanlar
+    };
+    
+    const { error } = await client
+      .from('etkinlik_revizyon_gecmisi')
+      .insert(gecmisKaydi);
+    
+    if (error) {
+      console.error('⚠️ Revizyon geçmişi kaydedilirken hata:', error);
+      // Kritik bir hata değil, revizyon işlemine devam et
+    } else {
+      console.log(`📚 Revizyon geçmişi kaydedildi (${revizyonNumarasi}. revizyon)`);
+    }
+    
+  } catch (error) {
+    console.error('⚠️ Revizyon geçmişi kaydetme hatası:', error);
+    // Kritik bir hata değil, devam et
+  }
+}
 
 // PDF Formlar için fonksiyonlar
 export interface FormDosyasi {
@@ -1200,7 +1188,7 @@ export interface FormDosyasi {
   dosyaYolu: string;
   aciklama?: string;
   kategori: 'Kulüp' | 'Etkinlik' | 'SKS' | 'Diğer';
-  yuklemeTarihi: string;
+  yuklemeTarihi?: string;
 }
 
 // Kullanıcı rolünü almak için yardımcı fonksiyon
@@ -1487,7 +1475,123 @@ export interface EtkinlikBelgeUpload {
   dosyaAdi: string;
   tip: string;
   basvuruId: string;
+  belgeNotu?: string; // Kullanıcının bıraktığı not
 }
+
+export interface EtkinlikGorseliUpload {
+  dosya: File;
+  dosyaAdi: string;
+  basvuruId: string;
+}
+
+// Etkinlik görseli yükle  
+export const etkinlikGorseliYukle = async (
+  gorsel: EtkinlikGorseliUpload
+): Promise<string | null> => {
+  try {
+    console.log('Etkinlik görseli yükleniyor:', gorsel.dosyaAdi);
+    
+    // Dosya formatını kontrol et
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(gorsel.dosya.type)) {
+      throw new Error('Sadece JPG, JPEG ve PNG formatları desteklenir!');
+    }
+    
+    // Görsel boyutlarını kontrol et (esnek sınırlar)
+    console.log('Görsel boyut kontrolü başlıyor...');
+    const MIN_WIDTH = 300;
+    const MIN_HEIGHT = 300;
+    const MAX_WIDTH = 2048;
+    const MAX_HEIGHT = 2048;
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+    
+    // Dosya boyutu kontrolü
+    if (gorsel.dosya.size > MAX_FILE_SIZE) {
+      throw new Error('Dosya boyutu 5MB\'dan küçük olmalıdır!');
+    }
+    
+    const isValidSize = await new Promise<boolean>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        console.log(`Görsel boyutları: ${img.width}x${img.height}`);
+        const isValid = img.width >= MIN_WIDTH && 
+                       img.height >= MIN_HEIGHT && 
+                       img.width <= MAX_WIDTH && 
+                       img.height <= MAX_HEIGHT;
+        console.log('Boyut kontrolü sonucu:', isValid ? 'BAŞARILI' : 'BAŞARISIZ');
+        resolve(isValid);
+      };
+      img.onerror = () => {
+        console.error('Görsel yükleme hatası');
+        resolve(false);
+      };
+      img.src = URL.createObjectURL(gorsel.dosya);
+    });
+    
+    if (!isValidSize) {
+      console.error('Görsel boyut kontrolü başarısız!');
+      throw new Error(`Görsel boyutları ${MIN_WIDTH}x${MIN_HEIGHT} ile ${MAX_WIDTH}x${MAX_HEIGHT} arasında olmalıdır!`);
+    }
+    console.log('Görsel boyut kontrolü başarılı!');
+    
+    // Oturum kontrolü
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      throw new Error('Oturum açık değil');
+    }
+    
+    // Dosya yolunu hazırla
+    const normalizeString = (str: string): string => {
+      return str
+        .replace(/\s+/g, '_')
+        .replace(/ı/g, 'i')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c');
+    };
+    
+    const safeFileName = normalizeString(gorsel.dosyaAdi);
+    
+    // Başvuru bilgisini al
+    const { data: basvuruData, error: basvuruError } = await supabase
+      .from('etkinlik_basvurulari')
+      .select('kulup_id')
+      .eq('id', gorsel.basvuruId)
+      .single();
+    
+    if (basvuruError) {
+      throw new Error(`Başvuru bilgisi alınamadı: ${basvuruError.message}`);
+    }
+    
+    const kulupId = basvuruData.kulup_id;
+    
+    // Organizasyon yapısı: kulupId/basvuruId/gorseller/{timestamp}_{dosyaAdi}
+    const dosyaYolu = `${kulupId}/${gorsel.basvuruId}/gorseller/${Date.now()}_${safeFileName}`;
+    
+    // Görseli yükle
+    const { data, error } = await supabase.storage
+      .from('etkinlik-gorselleri')
+      .upload(dosyaYolu, gorsel.dosya, {
+        contentType: gorsel.dosya.type,
+        upsert: true,
+        cacheControl: '3600'
+      });
+    
+    if (error) {
+      console.error('Görsel yükleme hatası:', error);
+      throw new Error(`Görsel yüklenemedi: ${error.message}`);
+    }
+    
+    console.log('Görsel başarıyla yüklendi:', data.path);
+    return data.path;
+    
+  } catch (error) {
+    console.error('Etkinlik görseli yüklenirken hata:', error);
+    throw error;
+  }
+};
 
 // Etkinlik belgesi yükle
 export const etkinlikBelgeYukle = async (
@@ -1617,7 +1721,8 @@ Bu sorunu çözmek için sistem yöneticinize başvurun ve şu izinleri kontrol 
           basvuru_id: belge.basvuruId,
           tip: belge.tip,
           dosya_adi: belge.dosyaAdi,
-          dosya_yolu: data.path
+          dosya_yolu: data.path,
+          belge_notu: belge.belgeNotu || null
         });
       
       if (dbError) {
@@ -2343,7 +2448,7 @@ export const belgeOnayla = async (
     const onayKolonu = onayTipi === 'Danışman' ? 'danisman_onay' : 'sks_onay';
     
     // JSONB kolonunu güncelle
-    const { data, error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from(belgeTipi)
       .update({ [onayKolonu]: onayBilgisi })
       .eq('id', belgeId)
@@ -2437,7 +2542,7 @@ export const belgeReddet = async (
     const onayKolonu = onayTipi === 'Danışman' ? 'danisman_onay' : 'sks_onay';
     
     // JSONB kolonunu güncelle
-    const { data, error: updateError } = await supabaseAdmin
+    const { error: updateError } = await supabaseAdmin
       .from(belgeTipi)
       .update({ [onayKolonu]: redBilgisi })
       .eq('id', belgeId)
@@ -2485,6 +2590,24 @@ export const ekBelgeReddet = async (belgeId: string, reddeden: 'Danışman' | 'S
   return belgeReddet(belgeId, reddeden, redSebebi);
 };
 
+// Revizyon Geçmişi Fonksiyonları
 
+export const getRevizyonGecmisi = async (basvuruId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('etkinlik_revizyon_gecmisi')
+      .select('*')
+      .eq('basvuru_id', basvuruId)
+      .order('revizyon_tarihi', { ascending: false });
 
+    if (error) {
+      console.error('Revizyon geçmişi alınırken hata:', error);
+      throw error;
+    }
 
+    return data || [];
+  } catch (error) {
+    console.error('Revizyon geçmişi alınırken hata:', error);
+    throw error;
+  }
+};
