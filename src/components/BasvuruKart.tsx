@@ -59,14 +59,14 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
       setIsRevizing(true);
       console.log("Revize edilecek başvuru:", basvuru);
       
-      // Revizyon işlemini başlat
+      // Başvuruyu revize moduna geçir (revizyon bayrağı henüz false)
       const yeniBasvuru = await revizeEt(basvuru, revizeTuru);
-      console.log("Revize edilen başvuru:", yeniBasvuru);
-      console.log("Revizyon durumu:", yeniBasvuru.revizyon);
+      console.log("Başvuru revize moduna geçirildi:", yeniBasvuru);
+      console.log("⚠️ Revizyon durumu:", yeniBasvuru.revizyon, "(Henüz false - gerçek değişiklik yapılınca true olacak)");
       console.log("Danışman onayı:", yeniBasvuru.danismanOnay);
       
-      // Revize işlemini takip etmek için log ekle
-      console.log("Revize edilen başvuru danışman onayına gönderiliyor...");
+      // Kullanıcı artık değişiklik yapabilir
+      console.log("✅ Kullanıcı revize sayfasına yönlendiriliyor...");
       
       // Yönlendirme işlemi dropdown butonlarında yapılacak, burada yapmıyoruz
       // navigate(`/kulup-paneli/basvuru-duzenle/${yeniBasvuru.id}`);

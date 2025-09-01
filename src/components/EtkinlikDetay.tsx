@@ -4,6 +4,7 @@ import { getBasvuruById, etkinlikBelgeIndir } from '../utils/supabaseStorage';
 import { BasvuruDetay } from './BasvuruDetay';
 import { ArrowLeft, Calendar, MapPin, User } from 'lucide-react';
 import { EtkinlikBasvuru } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 export function EtkinlikDetay() {
   const { etkinlikId } = useParams<{ etkinlikId: string }>();
@@ -11,6 +12,7 @@ export function EtkinlikDetay() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchBasvuru = async () => {
@@ -63,6 +65,23 @@ export function EtkinlikDetay() {
     }
   };
 
+  // Kullanıcının rolüne göre doğru paneli belirle
+  const getBackRoute = () => {
+    const role = user?.role;
+    switch (role) {
+      case 'sks':
+        return '/sks-paneli';
+      case 'danisman':
+        return '/danisman-paneli';
+      case 'kulup_baskani':
+        return '/kulup-paneli';
+      case 'admin':
+        return '/admin';
+      default:
+        return '/'; // Varsayılan olarak ana sayfa
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8 flex justify-center items-center">
@@ -82,7 +101,7 @@ export function EtkinlikDetay() {
             <h2 className="text-xl text-red-600 mb-2">Hata</h2>
             <p className="text-gray-600">{error || 'Etkinlik bulunamadı'}</p>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate(getBackRoute())}
               className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -99,7 +118,7 @@ export function EtkinlikDetay() {
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate(getBackRoute())}
             className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -163,7 +182,7 @@ export function EtkinlikDetay() {
             showBelgeler={true}
             onBelgeIndir={handleBelgeIndir}
             userRole="kulup_baskani"
-            showEkBelgeler={true}
+            showEkBelgeler={false}
             onEkBelgeGuncellendi={handleEkBelgeGuncellendi}
           />
         </div>

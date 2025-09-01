@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { EtkinlikBasvuru } from '../types';
-
-import { FileDown, CheckCircle, XCircle, AlertCircle, Info } from 'lucide-react';
+import { etkinlikGorseliIndir } from '../utils/supabaseStorage';
+import { FileDown, CheckCircle, XCircle, AlertCircle, Info, Image, X } from 'lucide-react';
 import { EkBelgeYonetimi } from './EkBelgeYonetimi';
 
 interface BasvuruDetayProps {
@@ -36,6 +36,17 @@ export function BasvuruDetay({
   const [redSebebi, setRedSebebi] = useState<string>('');
   const [activeRedBelgeId, setActiveRedBelgeId] = useState<string | null>(null);
   
+  // Görsel popup için state'ler
+  const [gorselPopup, setGorselPopup] = useState<{
+    isOpen: boolean;
+    gorselUrl: string;
+    etkinlikAdi: string;
+  }>({
+    isOpen: false,
+    gorselUrl: '',
+    etkinlikAdi: ''
+  });
+  
   // Belge notu popup için state'ler
   const [belgeNotuPopup, setBelgeNotuPopup] = useState<{
     isOpen: boolean;
@@ -66,6 +77,36 @@ export function BasvuruDetay({
       isOpen: false,
       belgeAdi: '',
       belgeNotu: ''
+    });
+  };
+
+  // Etkinlik görselini göster
+  const handleGorselGoster = async () => {
+    if (!basvuru.etkinlikGorseli) return;
+    
+    try {
+      const gorselUrl = await etkinlikGorseliIndir(basvuru.etkinlikGorseli);
+      if (gorselUrl) {
+        setGorselPopup({
+          isOpen: true,
+          gorselUrl,
+          etkinlikAdi: basvuru.etkinlikAdi
+        });
+      } else {
+        alert('Görsel yüklenemiyor. Lütfen daha sonra tekrar deneyin.');
+      }
+    } catch (error) {
+      console.error('Görsel yükleme hatası:', error);
+      alert('Görsel yüklenirken bir hata oluştu.');
+    }
+  };
+
+  // Görsel popup'ını kapat
+  const handleGorselPopupKapat = () => {
+    setGorselPopup({
+      isOpen: false,
+      gorselUrl: '',
+      etkinlikAdi: ''
     });
   };
 
@@ -257,6 +298,49 @@ export function BasvuruDetay({
         </div>
       )}
 
+      {/* Etkinlik Görseli Popup Modal */}
+      {gorselPopup.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-gray-800 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Image className="w-5 h-5" />
+                Etkinlik Görseli - {gorselPopup.etkinlikAdi}
+              </h3>
+              <button
+                onClick={handleGorselPopupKapat}
+                className="text-white hover:text-gray-300 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 flex items-center justify-center bg-gray-50">
+              <img
+                src={gorselPopup.gorselUrl}
+                alt={`${gorselPopup.etkinlikAdi} etkinlik görseli`}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const parent = target.parentElement;
+                  if (parent) {
+                    parent.innerHTML = '<div class="text-gray-600 p-8 text-center"><p>Görsel yüklenemedi</p></div>';
+                  }
+                }}
+              />
+            </div>
+            <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <button
+                onClick={handleGorselPopupKapat}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="space-y-6">
       <div className="space-y-4">
         {basvuru.revizyon && (
@@ -344,6 +428,25 @@ export function BasvuruDetay({
         <div>
           <label className="block text-sm font-medium text-gray-700">Açıklama</label>
           <div className="mt-1 text-gray-900 whitespace-pre-wrap">{basvuru.aciklama}</div>
+        </div>
+
+        {/* Etkinlik Görseli - Her zaman görünsün */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Etkinlik Görseli</label>
+          {basvuru.etkinlikGorseli ? (
+            <button
+              onClick={handleGorselGoster}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 border border-blue-200 transition-colors"
+            >
+              <Image className="w-4 h-4" />
+              Görseli Görüntüle
+            </button>
+          ) : (
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-500 rounded-lg border border-gray-200">
+              <Image className="w-4 h-4" />
+              Görsel yüklenmemiş
+            </div>
+          )}
         </div>
 
         {showBelgeler && basvuru.belgeler && basvuru.belgeler.length > 0 && (

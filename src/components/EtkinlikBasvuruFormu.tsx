@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Plus, X, Upload, Info } from 'lucide-react';
+import { ArrowLeft, Plus, X, Upload, Info, Image } from 'lucide-react';
 import { EtkinlikBasvuru, Sponsor, Konusmaci, EtkinlikBelge, Kulup } from '../types';
-import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil, etkinlikGorseliYukle } from '../utils/supabaseStorage';
+import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil, etkinlikGorseliYukle, etkinlikGorseliIndir } from '../utils/supabaseStorage';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
 import { sendEtkinlikBasvuruNotification } from '../utils/emailService';
@@ -15,14 +15,14 @@ const FAKULTELER = [
   'Gemi İnşaatı ve Denizcilik Fakültesi',
   'Fen-Edebiyat Fakültesi',
   'Mimarlık Fakültesi',
-  'İşletme Fakültesi',
+  'İktisadi İdari Bilimler Fakültesi',
   'Eğitim Fakültesi',
   'Sanat Tasarım Fakültesi',
   'Yabancı Diller Yüksekokulu',
   'Kulüpler Vadisi',
   'Oditoryum',
   'Tarihi Hamam',
-  'Kongre Merkezi',
+  'Kongre ve Kültür Merkezi',
   'Şevket Erk Konferans Salonu',
   'Online',
   'Diğer (Okul İçi)',
@@ -83,23 +83,44 @@ export function EtkinlikBasvuruFormu() {
   const belgeReplaceInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
 
   // Tarih girişleri için yıl aralığını sınırla
-  const MIN_EVENT_DATE = '2000-01-01T00:00';
-  const MAX_EVENT_DATE = '2100-12-31T23:59';
+  const MIN_YEAR = 2000;
+  const MAX_YEAR = 2100;
 
 
 
-  // ISO/timestamp değerlerini datetime-local input formatına çevir (YYYY-MM-DDTHH:mm)
-  const toInputDateTime = (value?: string): string => {
+  // ISO/timestamp değerlerini date input için çevir (YYYY-MM-DD)
+  const toInputDate = (value?: string): string => {
     if (!value) return '';
     const d = new Date(value);
     if (isNaN(d.getTime())) return '';
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // ISO/timestamp değerlerini saat inputu için çevir (HH:mm)
+  const toInputTime = (value?: string): string => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '';
     const hh = String(d.getHours()).padStart(2, '0');
     const min = String(d.getMinutes()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+    return `${hh}:${min}`;
   };
+
+  // YYYY-MM-DD ve HH:mm formatlarını ISO timestamp'a çevir
+  const toISODateTime = (dateStr: string, timeStr: string): string => {
+    if (!dateStr || !timeStr) return '';
+    const [yyyy, mm, dd] = dateStr.split('-');
+    const [hh, min] = timeStr.split(':');
+    if (!dd || !mm || !yyyy || !hh || !min) return '';
+    const date = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), parseInt(hh), parseInt(min));
+    if (isNaN(date.getTime())) return '';
+    return date.toISOString();
+  };
+
+  // HTML5 date input kullanıldığı için formatDateInput ve validateDateFormat fonksiyonları kaldırıldı
 
   // Belge adı formatı: Kulup_Etkinlik_BelgeTur+Versiyon_Tarih (ddMMyyyy)
   const toSlug = (value: string): string => {
@@ -146,8 +167,20 @@ export function EtkinlikBasvuruFormu() {
   const showBelgeSection = !revizeModu || belgelerRevizeModu;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gorselError, setGorselError] = useState<string | null>(null);
   const [kulup, setKulup] = useState<Kulup | null>(null);
   const [mevcutGorsel, setMevcutGorsel] = useState<string | null>(null);
+  
+  // Görsel popup için state'ler  
+  const [gorselPopup, setGorselPopup] = useState<{
+    isOpen: boolean;
+    gorselUrl: string;
+    etkinlikAdi: string;
+  }>({
+    isOpen: false,
+    gorselUrl: '',
+    etkinlikAdi: ''
+  });
   
   // Belge notu popup için state'ler
   const [belgeNotuPopup, setBelgeNotuPopup] = useState<{
@@ -444,6 +477,36 @@ export function EtkinlikBasvuruFormu() {
     });
   };
 
+  // Mevcut etkinlik görselini göster
+  const handleMevcutGorselGoster = async () => {
+    if (!mevcutGorsel) return;
+    
+    try {
+      const gorselUrl = await etkinlikGorseliIndir(mevcutGorsel);
+      if (gorselUrl) {
+        setGorselPopup({
+          isOpen: true,
+          gorselUrl,
+          etkinlikAdi: formData.etkinlikAdi || 'Etkinlik'
+        });
+      } else {
+        alert('Görsel yüklenemiyor. Lütfen daha sonra tekrar deneyin.');
+      }
+    } catch (error) {
+      console.error('Görsel yükleme hatası:', error);
+      alert('Görsel yüklenirken bir hata oluştu.');
+    }
+  };
+
+  // Görsel popup'ını kapat
+  const handleGorselPopupKapat = () => {
+    setGorselPopup({
+      isOpen: false,
+      gorselUrl: '',
+      etkinlikAdi: ''
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -488,15 +551,14 @@ export function EtkinlikBasvuruFormu() {
           const b2 = new Date(z.bitis);
 
           // Geçerli tarih aralığı doğrulaması (yıl sınırı + kronolojik sıra)
-          const min = new Date(MIN_EVENT_DATE);
-          const max = new Date(MAX_EVENT_DATE);
           if (isNaN(b1.getTime()) || isNaN(b2.getTime())) {
-            setError('Geçersiz tarih formatı. Lütfen geçerli bir tarih giriniz.');
+            setError('Geçersiz tarih formatı. Lütfen geçerli bir tarih ve saat giriniz.');
             setLoading(false);
             return;
           }
-          if (b1 < min || b1 > max || b2 < min || b2 > max) {
-            setError('Tarih aralığı geçersiz. Yıl 2000 ile 2100 arasında olmalıdır.');
+          if (b1.getFullYear() < MIN_YEAR || b1.getFullYear() > MAX_YEAR || 
+              b2.getFullYear() < MIN_YEAR || b2.getFullYear() > MAX_YEAR) {
+            setError(`Tarih aralığı geçersiz. Yıl ${MIN_YEAR} ile ${MAX_YEAR} arasında olmalıdır.`);
             setLoading(false);
             return;
           }
@@ -526,6 +588,31 @@ export function EtkinlikBasvuruFormu() {
               // Debug: Mevcut başvuru revizyon durumunu logla
         console.log('🔍 Submit Debug - Mevcut başvuru revizyon durumu:', mevcutBasvuru?.revizyon);
         
+        // Gerçek değişiklik olup olmadığını kontrol et
+        const hasEtkinlikChanges = mevcutBasvuru && (
+          mevcutBasvuru.etkinlikAdi !== formData.etkinlikAdi ||
+          mevcutBasvuru.etkinlikTuru !== formData.etkinlikTuru ||
+          mevcutBasvuru.digerTuruAciklama !== (formData.etkinlikTuru === 'Diğer' ? formData.digerTuruAciklama : undefined) ||
+          mevcutBasvuru.etkinlikYeri.fakulte !== formData.fakulte ||
+          mevcutBasvuru.etkinlikYeri.detay !== formData.adresDetay ||
+          mevcutBasvuru.aciklama !== formData.aciklama ||
+          JSON.stringify(mevcutBasvuru.zamanDilimleri) !== JSON.stringify(zamanDilimleri) ||
+          JSON.stringify(mevcutBasvuru.sponsorlar) !== JSON.stringify(sponsorlar) ||
+          JSON.stringify(mevcutBasvuru.konusmacilar) !== JSON.stringify(konusmacilar)
+        );
+        
+        const hasBelgeChanges = Object.keys(belgeler).length > 0; // Yeni belgeler yüklenmiş
+        const hasGorselChanges = !!formData.etkinlikGorseli; // Yeni görsel yüklenmiş
+        
+        // Sadece gerçek değişiklik varsa revizyon işaretle
+        const isRevizyon = mevcutBasvuru && (hasEtkinlikChanges || hasBelgeChanges || hasGorselChanges);
+        
+        console.log('🔍 Değişiklik Kontrolü:');
+        console.log('  - Etkinlik değişiklikleri:', hasEtkinlikChanges);
+        console.log('  - Belge değişiklikleri:', hasBelgeChanges);
+        console.log('  - Görsel değişiklikleri:', hasGorselChanges);
+        console.log('  - Revizyon işaretlenecek mi:', isRevizyon);
+        
         // Yeni başvuru oluştur
         const yeniBasvuru: EtkinlikBasvuru = {
         id: mevcutBasvuru?.id || '',
@@ -543,8 +630,8 @@ export function EtkinlikBasvuruFormu() {
         zamanDilimleri,
         aciklama: formData.aciklama,
          durum: 'Beklemede',
-         // Sadece gerçek revizyonlar için revizyon bayrağı true - mevcut durumu koru
-         revizyon: !!mevcutBasvuru?.revizyon,
+         // Sadece gerçek değişiklik varsa revizyon işaretle
+         revizyon: isRevizyon || false,
         sponsorlar: sponsorlar.map(s => ({
           firmaAdi: s.firmaAdi,
           detay: s.detay
@@ -807,6 +894,49 @@ export function EtkinlikBasvuruFormu() {
         </div>
       )}
 
+      {/* Etkinlik Görseli Popup Modal */}
+      {gorselPopup.isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="bg-gray-800 text-white px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Image className="w-5 h-5" />
+                Etkinlik Görseli - {gorselPopup.etkinlikAdi}
+              </h3>
+              <button
+                onClick={handleGorselPopupKapat}
+                className="text-white hover:text-gray-300 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-6 flex items-center justify-center bg-gray-50">
+              <img
+                src={gorselPopup.gorselUrl}
+                alt={`${gorselPopup.etkinlikAdi} etkinlik görseli`}
+                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-lg"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const parent = target.parentElement;
+                  if (parent) {
+                    parent.innerHTML = '<div class="text-gray-600 p-8 text-center"><p>Görsel yüklenemedi</p></div>';
+                  }
+                }}
+              />
+            </div>
+            <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <button
+                onClick={handleGorselPopupKapat}
+                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-8">
       <button
         onClick={() => navigate('/kulup-paneli')}
@@ -925,7 +1055,7 @@ export function EtkinlikBasvuruFormu() {
                   </select>
                   {formData.fakulte && (
                     (() => {
-                      const isSalon = ['Tarihi Hamam', 'Kongre Merkezi', 'Şevket Erk', 'Oditoryum'].some(s => formData.fakulte.includes(s));
+                      const isSalon = ['Tarihi Hamam', 'Kongre ve Kültür Merkezi', 'Şevket Erk', 'Oditoryum'].some(s => formData.fakulte.includes(s));
                       const isFaculty = !isSalon && formData.fakulte.includes('Fakültesi');
                       const isOkulDisi = formData.fakulte.includes('Okul Dışı');
                       if (isSalon) {
@@ -997,37 +1127,65 @@ export function EtkinlikBasvuruFormu() {
                  )}
                  
                 {zamanDilimleri.map((z, idx) => (
-                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end mt-3">
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-end mt-3">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Başlangıç <span className="text-red-600">*</span></label>
+                      <label className="block text-xs text-gray-600 mb-1">Başlangıç Tarihi <span className="text-red-600">*</span></label>
                       <input
-                        type="datetime-local"
-                        value={toInputDateTime(z.baslangic) || ''}
+                        type="date"
+                        value={toInputDate(z.baslangic) || ''}
                         onChange={(e) => {
-                          const v = e.target.value;
-                          // ISO timestamp formatına çevir
-                          const isoV = v ? new Date(v).toISOString() : '';
+                          const dateValue = e.target.value; // YYYY-MM-DD formatında
+                          const timeStr = toInputTime(z.baslangic) || '00:00';
+                          const isoV = dateValue ? toISODateTime(dateValue, timeStr) : '';
                           setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, baslangic: isoV } : d));
                         }}
-                        min={MIN_EVENT_DATE}
-                        max={MAX_EVENT_DATE}
-                        className={`w-full px-3 py-2 border rounded ${(!z.baslangic || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
+                        min={`${MIN_YEAR}-01-01`}
+                        max={`${MAX_YEAR}-12-31`}
+                        className={`w-full px-3 py-2 border rounded text-sm ${(!z.baslangic || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Bitiş <span className="text-red-600">*</span></label>
+                      <label className="block text-xs text-gray-600 mb-1">Saat <span className="text-red-600">*</span></label>
                       <input
-                        type="datetime-local"
-                        value={toInputDateTime(z.bitis) || ''}
+                        type="time"
+                        value={toInputTime(z.baslangic) || ''}
                         onChange={(e) => {
-                          const v = e.target.value;
-                          // ISO timestamp formatına çevir
-                          const isoV = v ? new Date(v).toISOString() : '';
+                          const timeStr = e.target.value;
+                          const dateStr = toInputDate(z.baslangic) || '';
+                          const isoV = toISODateTime(dateStr, timeStr);
+                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, baslangic: isoV } : d));
+                        }}
+                        className={`w-full px-3 py-2 border rounded text-sm ${(!z.baslangic || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Bitiş Tarihi <span className="text-red-600">*</span></label>
+                      <input
+                        type="date"
+                        value={toInputDate(z.bitis) || ''}
+                        onChange={(e) => {
+                          const dateValue = e.target.value; // YYYY-MM-DD formatında
+                          const timeStr = toInputTime(z.bitis) || '23:59';
+                          const isoV = dateValue ? toISODateTime(dateValue, timeStr) : '';
                           setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, bitis: isoV } : d));
                         }}
-                        min={MIN_EVENT_DATE}
-                        max={MAX_EVENT_DATE}
-                        className={`w-full px-3 py-2 border rounded ${(!z.bitis || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
+                        min={`${MIN_YEAR}-01-01`}
+                        max={`${MAX_YEAR}-12-31`}
+                        className={`w-full px-3 py-2 border rounded text-sm ${(!z.bitis || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Saat <span className="text-red-600">*</span></label>
+                      <input
+                        type="time"
+                        value={toInputTime(z.bitis) || ''}
+                        onChange={(e) => {
+                          const timeStr = e.target.value;
+                          const dateStr = toInputDate(z.bitis) || '';
+                          const isoV = toISODateTime(dateStr, timeStr);
+                          setZamanDilimleri(prev => prev.map((d, i) => i === idx ? { ...d, bitis: isoV } : d));
+                        }}
+                        className={`w-full px-3 py-2 border rounded text-sm ${(!z.bitis || (z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis))) ? 'border-red-300' : 'border-gray-300'}`}
                       />
                     </div>
                     <div className="flex gap-2">
@@ -1040,7 +1198,7 @@ export function EtkinlikBasvuruFormu() {
                       </button>
                     </div>
                     {z.baslangic && z.bitis && new Date(z.baslangic) >= new Date(z.bitis) && (
-                      <div className="sm:col-span-3 text-[11px] text-red-600">Bu dilimde bitiş, başlangıçtan sonra olmalıdır.</div>
+                      <div className="sm:col-span-5 text-[11px] text-red-600">Bu dilimde bitiş, başlangıçtan sonra olmalıdır.</div>
                     )}
                   </div>
                 ))}
@@ -1181,54 +1339,191 @@ export function EtkinlikBasvuruFormu() {
                 </div>
               </div>
 
-              {/* Etkinlik Görseli */}
+            </>
+            )}
+
+            {/* Etkinlik Görseli - Belge bölümünde görünsün */}
+            {(showEventSections || showBelgeSection) && (
+            <div className="space-y-6">
               <div>
                 <label htmlFor="etkinlikGorseli" className="block text-sm font-medium text-gray-700 mb-1">
                   Etkinlik Görseli
                 </label>
-                <div className="text-xs text-gray-500 mb-2">
-                  300x300 ile 2048x2048 pixel arasında, maksimum 5MB, JPG/JPEG/PNG formatında
-                </div>
-                <input
-                  type="file"
-                  id="etkinlikGorseli"
-                  accept="image/jpeg,image/jpg,image/png"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setFormData({...formData, etkinlikGorseli: file || undefined});
-                  }}
-                  disabled={isAdvisorApproved && !etkinlikRevizeModu}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                {/* Mevcut görsel bilgisi */}
-                {mevcutGorsel && !formData.etkinlikGorseli && (
-                  <div className="mt-2 text-sm text-blue-600">
-                    Mevcut görsel: {mevcutGorsel.split('/').pop()}
+                  <div className="text-xs text-gray-500 mb-2">
+                    300x300 ile 2048x2048 pixel arasında, maksimum 5MB, JPG/JPEG/PNG formatında
+                    <div className="flex items-center gap-2 mt-1">
+                      {mevcutGorsel ? (
+                        <>
+                          <span className="block font-medium text-blue-600">• Mevcut görsel var, yeni yüklerseniz değiştirilecektir</span>
+                          <button
+                            type="button"
+                            onClick={handleMevcutGorselGoster}
+                            className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs hover:bg-blue-100 border border-blue-200 transition-colors"
+                          >
+                            <Image className="w-3 h-3" />
+                            Mevcut Görseli Gör
+                          </button>
+                        </>
+                      ) : (
+                        <span className="block font-medium text-gray-600">• Henüz etkinlik görseli yüklenmemiş</span>
+                      )}
+                    </div>
                   </div>
-                )}
-                {/* Yeni seçilen görsel */}
-                {formData.etkinlikGorseli && (
-                  <div className="mt-2 text-sm text-green-600">
-                    Yeni seçilen görsel: {formData.etkinlikGorseli.name}
-                  </div>
-                )}
-              </div>
+                  {/* Gizli file input */}
+                  <input
+                    type="file"
+                    id="etkinlikGorseli"
+                    accept="image/jpeg,image/jpg,image/png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      
+                      // Hata mesajını sıfırla
+                      setGorselError(null);
+                      
+                      if (!file) {
+                        setFormData({...formData, etkinlikGorseli: undefined});
+                        return;
+                      }
 
-              <div>
-              <label htmlFor="aciklama" className="block text-sm font-medium text-gray-700 mb-1">
-                Etkinlik Açıklaması <span className="text-red-600">*</span>
-              </label>
-              <textarea
-                id="aciklama"
-                value={formData.aciklama}
-                onChange={(e) => setFormData({...formData, aciklama: e.target.value})}
-                disabled={isAdvisorApproved && !etkinlikRevizeModu}
-                rows={4}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                required
-              />
+                      // Dosya tipi kontrolü
+                      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+                      if (!allowedTypes.includes(file.type)) {
+                        setGorselError('Lütfen sadece JPG, JPEG veya PNG formatında resim dosyası yükleyiniz!');
+                        e.target.value = ''; // Input'u temizle
+                        setFormData({...formData, etkinlikGorseli: undefined});
+                        return;
+                      }
+
+                      // Dosya boyutu kontrolü (5MB)
+                      const maxSize = 5 * 1024 * 1024; // 5MB
+                      if (file.size > maxSize) {
+                        setGorselError(`Dosya boyutu çok büyük! Maksimum ${maxSize / 1024 / 1024}MB olmalıdır.`);
+                        e.target.value = ''; // Input'u temizle
+                        setFormData({...formData, etkinlikGorseli: undefined});
+                        return;
+                      }
+
+                      // Dosya boyutları kontrolü (image load ile)
+                      const img = new window.Image();
+                      img.onload = () => {
+                        const { width, height } = img;
+                        if (width < 300 || height < 300 || width > 2048 || height > 2048) {
+                          setGorselError('Görsel boyutu 300x300 ile 2048x2048 pixel arasında olmalıdır!');
+                          e.target.value = ''; // Input'u temizle
+                          setFormData({...formData, etkinlikGorseli: undefined});
+                          return;
+                        }
+                        
+                        // Tüm kontroller başarılı, dosyayı kabul et
+                        setFormData({...formData, etkinlikGorseli: file});
+                      };
+                      img.onerror = () => {
+                        setGorselError('Geçersiz resim dosyası! Lütfen geçerli bir JPG, JPEG veya PNG dosyası seçiniz.');
+                        e.target.value = ''; // Input'u temizle
+                        setFormData({...formData, etkinlikGorseli: undefined});
+                        return;
+                      };
+                      img.src = URL.createObjectURL(file);
+                    }}
+                    disabled={false}
+                    className="hidden"
+                  />
+
+                  {/* Görsel seçim butonu */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fileInput = document.getElementById('etkinlikGorseli') as HTMLInputElement;
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-50 text-blue-700 border-2 border-dashed border-blue-300 rounded-lg hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"
+                  >
+                    <Upload className="w-5 h-5" />
+                    {mevcutGorsel ? 'Görsel Değiştir' : 'Görsel Seç'}
+                  </button>
+                  
+                  {/* Seçilen yeni görsel bilgisi */}
+                  {formData.etkinlikGorseli && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Image className="w-4 h-4 text-green-500" />
+                        <span className="text-sm text-green-600 font-medium">✅ Yeni görsel seçildi:</span>
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">
+                        {formData.etkinlikGorseli.name} - 
+                        {(formData.etkinlikGorseli.size / 1024 / 1024).toFixed(2)} MB
+                      </p>
+                      <p className="text-xs text-green-500 mt-1">
+                        Kaydet butonuna bastığınızda görsel yüklenecek
+                        {mevcutGorsel && " ve mevcut görsel değiştirilecek"}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Görsel hata mesajı */}
+                  {gorselError && (
+                    <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <X className="w-4 h-4 text-red-500" />
+                        <span className="text-sm text-red-600 font-medium">Hata:</span>
+                      </div>
+                      <p className="text-sm text-red-600 mt-1">{gorselError}</p>
+                    </div>
+                  )}
+                  
+                  {/* Mevcut görsel bilgisi ve görüntüleme butonu */}
+                  {mevcutGorsel && !formData.etkinlikGorseli && !gorselError && (
+                    <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-sm text-blue-800 font-medium">Mevcut Görsel</div>
+                          <div className="text-xs text-blue-600">{mevcutGorsel.split('/').pop()}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleMevcutGorselGoster}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors text-sm"
+                        >
+                          <Image className="w-4 h-4" />
+                          Görüntüle
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Yeni seçilen görsel */}
+                  {formData.etkinlikGorseli && !gorselError && (
+                    <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-green-600">
+                        <div className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center">
+                          <div className="w-2 h-2 bg-white rounded-full"></div>
+                        </div>
+                        <span className="text-sm font-medium">Başarılı:</span>
+                      </div>
+                      <p className="text-sm text-green-600 mt-1">
+                        Görsel seçildi: {formData.etkinlikGorseli.name}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                <label htmlFor="aciklama" className="block text-sm font-medium text-gray-700 mb-1">
+                  Etkinlik Açıklaması <span className="text-red-600">*</span>
+                </label>
+                <textarea
+                  id="aciklama"
+                  value={formData.aciklama}
+                  onChange={(e) => setFormData({...formData, aciklama: e.target.value})}
+                  disabled={isAdvisorApproved && !etkinlikRevizeModu}
+                  rows={4}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
               </div>
-            </>
+            </div>
             )}
 
             {showBelgeSection && (

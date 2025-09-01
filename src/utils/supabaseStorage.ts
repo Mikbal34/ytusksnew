@@ -1062,9 +1062,10 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru, revizeTuru?: 'belgeler'
     await saveRevisionHistory(basvuru, revizeTuru, kullaniciId);
     
     // 2️⃣ REVIZE TÜRÜNE GÖRE ONAY DURUMLARI BELİRLE
+    // ⚠️ ARTIK HİÇBİR ZAMAN HEMEN REVİZYON İŞARETLEMİYORUZ!
+    // Revizyon işareti sadece kullanıcı gerçekten değişiklik yapıp submit ettiğinde konur
     let updateData: any = {
-      revizyon: true,
-      // Diğer alanlar kullanıcı tarafından değiştirilecek (EtkinlikBasvuruFormu'nda)
+      // revizyon: true, // ❌ KALDIRILDI - Sadece form submit'te yapılacak
     };
     
     if (revizeTuru === 'belgeler') {
@@ -1125,7 +1126,8 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru, revizeTuru?: 'belgeler'
       throw new Error('Başvuru güncellenemedi: Hiçbir satır etkilenmedi. RLS politikası kontrol edilmeli.');
     }
     
-    console.log('✅ Başvuru in-place güncellendi (ID aynı kaldı):', basvuru.id);
+    console.log('✅ Başvuru revize moduna geçirildi (ID aynı kaldı):', basvuru.id);
+    console.log('⚠️  Revizyon bayrağı henüz FALSE - Gerçek değişiklik yapılıp kaydedildiğinde TRUE olacak');
     
     // 4️⃣ BELGE ONAYLARINI REVIZE TÜRÜNE GÖRE AYARLA
     if (revizeTuru !== 'belgeler') {
@@ -1806,6 +1808,46 @@ Bu sorunu çözmek için sistem yöneticinize başvurun ve şu izinleri kontrol 
     }
   } catch (error) {
     console.error('Belge yükleme işlemi başarısız:', error);
+    return null;
+  }
+};
+
+// Etkinlik görseli indir/görüntüle
+export const etkinlikGorseliIndir = async (dosyaYolu: string): Promise<string | null> => {
+  try {
+    console.log('Etkinlik görseli indiriliyor:', dosyaYolu);
+    
+    // Eğer dosya yolu base64 ile başlıyorsa, direkt olarak döndür
+    if (dosyaYolu.startsWith('data:')) {
+      console.log('Base64 görsel tespit edildi, direkt döndürülüyor');
+      return dosyaYolu;
+    }
+    
+    // Storage'dan görseli indir
+    const { data, error } = await supabase.storage
+      .from('etkinlik-gorselleri')
+      .createSignedUrl(dosyaYolu, 300); // 5 dakika geçerli bağlantı (görsel için daha uzun)
+    
+    if (error) {
+      console.error('Görsel indirme bağlantısı oluşturma hatası:', error);
+      
+      // Bucket yok hatası için özel mesaj
+      if (error.message && (
+          error.message.includes('bucket not found') || 
+          error.message.includes('not exist') ||
+          error.message.includes('does not exist')
+      )) {
+        console.error('Etkinlik görselleri bucket bulunamadı.');
+        return null;
+      }
+      
+      throw error;
+    }
+    
+    console.log('Görsel indirme bağlantısı oluşturuldu');
+    return data.signedUrl;
+  } catch (error) {
+    console.error('Görsel indirme işlemi başarısız:', error);
     return null;
   }
 };
