@@ -455,8 +455,8 @@ export function BasvuruDetay({
             <div className="space-y-2">
               {(userRole === 'sks' 
                 ? basvuru.belgeler.filter(b => 
-                    // SKS: Sadece danışman onaylamış belgeleri veya henüz hiç onaylanmamış belgeleri göster
-                    !b.danismanOnay || b.danismanOnay.durum === 'Onaylandı'
+                    // SKS: Sadece danışman tarafından onaylanmış belgeleri göster
+                    b.danismanOnay?.durum === 'Onaylandı'
                   ) 
                 : basvuru.belgeler
               ).map((belge, index) => (

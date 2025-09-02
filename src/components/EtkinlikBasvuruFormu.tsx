@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, X, Upload, Info, Image } from 'lucide-react';
-import { EtkinlikBasvuru, Sponsor, Konusmaci, EtkinlikBelge, Kulup } from '../types';
+import { EtkinlikBasvuru, Sponsor, Konusmaci, EtkinlikBelge, Kulup, OnayDurumu } from '../types';
 import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil, etkinlikGorseliYukle, etkinlikGorseliIndir } from '../utils/supabaseStorage';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
@@ -408,10 +408,21 @@ export function EtkinlikBasvuruFormu() {
       const eskiBelgeler = mevcutBasvuru.belgeler.filter(b => b.tip === tip);
       const eskiBelge = eskiBelgeler[0]; // Sadece ilk belgeyi al
       
-      if (eskiBelge && eskiBelge.id && typeof eskiBelge.dosya === 'string') {
+      console.log(`📋 ${tip} tipindeki eski belgeler:`, eskiBelgeler);
+      console.log(`🎯 Silinecek eski belge:`, eskiBelge);
+      
+      if (eskiBelge && eskiBelge.id) {
         try {
-          console.log(`Eski belge siliniyor: ${eskiBelge.id}, dosya yolu: ${eskiBelge.dosya}`);
-          const silindi = await etkinlikBelgeSil(eskiBelge.id, eskiBelge.dosya);
+          const dosyaYolu = typeof eskiBelge.dosya === 'string' ? eskiBelge.dosya : '';
+          console.log(`🔄 Eski belge siliniyor:`, {
+            id: eskiBelge.id,
+            tip: eskiBelge.tip,
+            dosyaAdi: eskiBelge.dosyaAdi,
+            dosyaYolu: dosyaYolu,
+            dosyaYoluUzunluk: dosyaYolu ? dosyaYolu.length : 0,
+            dosyaYoluTipi: typeof eskiBelge.dosya
+          });
+          const silindi = await etkinlikBelgeSil(eskiBelge.id, dosyaYolu);
           if (silindi) {
             console.log('Eski belge veritabanından başarıyla silindi');
             // Başvuruyu yeniden yükle ve state'i güncelle
@@ -607,12 +618,48 @@ export function EtkinlikBasvuruFormu() {
         // Sadece gerçek değişiklik varsa revizyon işaretle
         const isRevizyon = mevcutBasvuru && (hasEtkinlikChanges || hasBelgeChanges || hasGorselChanges);
         
+        // Revize türünü belirle
+        let revizeTuru: 'etkinlik' | 'belgeler' | 'ikisi' | undefined = undefined;
+        if (mevcutBasvuru && isRevizyon) {
+          if (hasEtkinlikChanges && (hasBelgeChanges || hasGorselChanges)) {
+            revizeTuru = 'ikisi'; // Hem etkinlik hem belge değişiklikleri
+          } else if (hasEtkinlikChanges) {
+            revizeTuru = 'etkinlik'; // Sadece etkinlik değişiklikleri
+          } else if (hasBelgeChanges || hasGorselChanges) {
+            revizeTuru = 'belgeler'; // Sadece belge/görsel değişiklikleri
+          }
+        }
+        
         console.log('🔍 Değişiklik Kontrolü:');
         console.log('  - Etkinlik değişiklikleri:', hasEtkinlikChanges);
         console.log('  - Belge değişiklikleri:', hasBelgeChanges);
         console.log('  - Görsel değişiklikleri:', hasGorselChanges);
         console.log('  - Revizyon işaretlenecek mi:', isRevizyon);
+        console.log('  - Revize türü:', revizeTuru);
         
+        // Revize türüne göre onay durumlarını belirle
+        let danismanOnayDurumu: OnayDurumu | undefined = undefined;
+        let sksOnayDurumu: OnayDurumu | undefined = undefined;
+        
+        if (mevcutBasvuru && revizeTuru) {
+          if (revizeTuru === 'belgeler') {
+            // Sadece belgeler değişiyor -> Etkinlik onaylarını koru
+            danismanOnayDurumu = mevcutBasvuru.danismanOnay;
+            sksOnayDurumu = mevcutBasvuru.sksOnay;
+            console.log('✅ Etkinlik onayları korunuyor (sadece belgeler revize)');
+          } else if (revizeTuru === 'etkinlik') {
+            // Sadece etkinlik değişiyor -> Etkinlik onaylarını sıfırla
+            danismanOnayDurumu = undefined;
+            sksOnayDurumu = undefined;
+            console.log('❌ Etkinlik onayları sıfırlanıyor (etkinlik bilgileri revize)');
+          } else if (revizeTuru === 'ikisi') {
+            // Her ikisi değişiyor -> Her şeyi sıfırla
+            danismanOnayDurumu = undefined;
+            sksOnayDurumu = undefined;
+            console.log('❌ Tüm onaylar sıfırlanıyor (her ikisi revize)');
+          }
+        }
+
         // Yeni başvuru oluştur
         const yeniBasvuru: EtkinlikBasvuru = {
         id: mevcutBasvuru?.id || '',
@@ -642,6 +689,9 @@ export function EtkinlikBasvuruFormu() {
           aciklama: k.aciklama
         })),
         belgeler: [],
+        // Revize türüne göre belirlenen onay durumları
+        danismanOnay: danismanOnayDurumu,
+        sksOnay: sksOnayDurumu,
         onayGecmisi: mevcutBasvuru?.onayGecmisi || {
           danismanOnaylari: [],
           sksOnaylari: []

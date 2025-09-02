@@ -836,6 +836,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     
     // Belgeler varsa güncelle - SADECE belgeler gerçekten değişmişse
     // Etkinlik onay/red işlemlerinde belgeler korunmalı
+    // SKS etkinlik onay/red işlemlerinde belgeler undefined gönderilerek korunur
     if (basvuru.belgeler && basvuru.belgeler.length > 0) {
       // Mevcut belgeleri kontrol et
       const { data: mevcutBelgeler } = await client
@@ -1085,86 +1086,59 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru, revizeTuru?: 'belgeler'
     }
     
     // 3️⃣ MEVCUT BAŞVURUYU IN-PLACE GÜNCELLE (ID değişmez!)
-    console.log('🔄 Admin client ile güncelleme yapılıyor:', updateData);
-    console.log('🔍 Güncellenecek başvuru ID:', basvuru.id);
-    
-    // Önce başvurunun varlığını kontrol et
-    const { data: existingCheck, error: checkError } = await client
-      .from('etkinlik_basvurulari')
-      .select('id, kulup_id, revizyon')
-      .eq('id', basvuru.id);
+    // Sadece belgeler revize durumunda etkinlik tablosunu güncellememiz gerekmez
+    if (revizeTuru !== 'belgeler') {
+      console.log('🔄 Admin client ile güncelleme yapılıyor:', updateData);
+      console.log('🔍 Güncellenecek başvuru ID:', basvuru.id);
       
-    if (checkError) {
-      console.error('❌ Başvuru varlık kontrolü hatası:', checkError);
-      throw new Error(`Başvuru kontrol edilemedi: ${checkError.message}`);
+      // Önce başvurunun varlığını kontrol et
+      const { data: existingCheck, error: checkError } = await client
+        .from('etkinlik_basvurulari')
+        .select('id, kulup_id, revizyon')
+        .eq('id', basvuru.id);
+        
+      if (checkError) {
+        console.error('❌ Başvuru varlık kontrolü hatası:', checkError);
+        throw new Error(`Başvuru kontrol edilemedi: ${checkError.message}`);
+      }
+      
+      console.log('✅ Başvuru varlık kontrolü:', existingCheck);
+      if (!existingCheck || existingCheck.length === 0) {
+        throw new Error(`Başvuru bulunamadı: ${basvuru.id}`);
+      }
+      
+      const { data: updateResult, error: updateError } = await client
+        .from('etkinlik_basvurulari')
+        .update(updateData)
+        .eq('id', basvuru.id)
+        .select('*');
+      
+      if (updateError) {
+        console.error('❌ Başvuru güncellenirken hata:', updateError);
+        console.error('❌ Hata kodu:', updateError.code);
+        console.error('❌ Hata mesajı:', updateError.message);
+        console.error('❌ Hata detayları:', updateError.details);
+        throw updateError;
+      }
+      
+      console.log('✅ Update sonucu:', updateResult);
+      console.log('✅ Etkilenen satır sayısı:', updateResult?.length || 0);
+      
+      if (!updateResult || updateResult.length === 0) {
+        console.error('❌ Hiçbir satır güncellenmedi! RLS politikası sorunu olabilir.');
+        throw new Error('Başvuru güncellenemedi: Hiçbir satır etkilenmedi. RLS politikası kontrol edilmeli.');
+      }
+      
+      console.log('✅ Başvuru revize moduna geçirildi (ID aynı kaldı):', basvuru.id);
+      console.log('⚠️  Revizyon bayrağı henüz FALSE - Gerçek değişiklik yapılıp kaydedildiğinde TRUE olacak');
+    } else {
+      console.log('✅ Sadece belgeler revize - Etkinlik tablosu güncellenmeyecek');
     }
-    
-    console.log('✅ Başvuru varlık kontrolü:', existingCheck);
-    if (!existingCheck || existingCheck.length === 0) {
-      throw new Error(`Başvuru bulunamadı: ${basvuru.id}`);
-    }
-    
-    const { data: updateResult, error: updateError } = await client
-      .from('etkinlik_basvurulari')
-      .update(updateData)
-      .eq('id', basvuru.id)
-      .select('*');
-    
-    if (updateError) {
-      console.error('❌ Başvuru güncellenirken hata:', updateError);
-      console.error('❌ Hata kodu:', updateError.code);
-      console.error('❌ Hata mesajı:', updateError.message);
-      console.error('❌ Hata detayları:', updateError.details);
-      throw updateError;
-    }
-    
-    console.log('✅ Update sonucu:', updateResult);
-    console.log('✅ Etkilenen satır sayısı:', updateResult?.length || 0);
-    
-    if (!updateResult || updateResult.length === 0) {
-      console.error('❌ Hiçbir satır güncellenmedi! RLS politikası sorunu olabilir.');
-      throw new Error('Başvuru güncellenemedi: Hiçbir satır etkilenmedi. RLS politikası kontrol edilmeli.');
-    }
-    
-    console.log('✅ Başvuru revize moduna geçirildi (ID aynı kaldı):', basvuru.id);
-    console.log('⚠️  Revizyon bayrağı henüz FALSE - Gerçek değişiklik yapılıp kaydedildiğinde TRUE olacak');
     
     // 4️⃣ BELGE ONAYLARINI REVIZE TÜRÜNE GÖRE AYARLA
-    if (revizeTuru !== 'belgeler') {
-      // Belgeler değişecek -> Belge onaylarını sıfırla
-      const belgeUpdateData = {
-        danisman_onay: null,
-        sks_onay: null
-      };
-      
-      // Etkinlik belgelerini güncelle
-      const { error: belgeUpdateError } = await client
-        .from('etkinlik_belgeleri')
-        .update(belgeUpdateData)
-        .eq('basvuru_id', basvuru.id);
-      
-      if (belgeUpdateError) {
-        console.error('⚠️ Belge onayları sıfırlanırken hata:', belgeUpdateError);
-        // Bu kritik bir hata değil, devam et
-      } else {
-        console.log('❌ Etkinlik belgesi onayları sıfırlandı');
-      }
-      
-      // Ek belgeleri güncelle  
-      const { error: ekBelgeUpdateError } = await client
-        .from('ek_belgeler')
-        .update(belgeUpdateData)
-        .eq('etkinlik_id', basvuru.id);
-      
-      if (ekBelgeUpdateError) {
-        console.error('⚠️ Ek belge onayları sıfırlanırken hata:', ekBelgeUpdateError);
-        // Bu kritik bir hata değil, devam et
-      } else {
-        console.log('❌ Ek belge onayları sıfırlandı');
-      }
-    } else {
-      console.log('✅ Belge onayları korundu (sadece belgeler revize değil)');
-    }
+    // ⚠️ ARTIK BELGELERİ HİÇBİR ZAMAN SIFIRLAMIYORUZ!
+    // Belge onayları sadece yeni belgeler yüklendiğinde form submit sırasında sıfırlanacak
+    console.log('✅ Mevcut belge onayları korunuyor - revizeEt fonksiyonu belge onaylarına dokunmuyor');
     
     // 5️⃣ GÜNCEL BAŞVURUYU AL VE RETURN ET
     const güncelBasvuru = await getBasvuruById(basvuru.id);
@@ -1908,47 +1882,169 @@ export const etkinlikBelgeIndir = async (dosyaYolu: string): Promise<string | nu
 // Etkinlik belgesi sil
 export const etkinlikBelgeSil = async (belgeId: string, dosyaYolu: string): Promise<boolean> => {
   try {
-    console.log(`ID: ${belgeId} olan belge siliniyor...`);
+    console.log(`🗑️ ID: ${belgeId} olan belge siliniyor...`);
+    console.log(`📁 Dosya yolu: "${dosyaYolu}"`);
     
-    // Dosya yolu kontrolü
+    // Dosya yolu kontrolü - boş veya geçersiz formatsa önce DB'den dosya yolunu almayı dene
+    if (!dosyaYolu || typeof dosyaYolu !== 'string' || dosyaYolu.trim() === '') {
+      console.warn('⚠️ Dosya yolu boş, veritabanından dosya yolunu almaya çalışıyorum...');
+      
+      // Önce belge bilgisini al
+      const { data: belgeData, error: selectError } = await supabaseAdmin
+        .from('etkinlik_belgeleri')
+        .select('dosya_yolu')
+        .eq('id', belgeId)
+        .single();
+      
+      if (selectError || !belgeData || !belgeData.dosya_yolu) {
+        console.warn('⚠️ Dosya yolu DB\'den de alınamadı, sadece veritabanından siliniyor...');
+        
+        // Sadece veritabanından sil
+        const { error: dbError } = await supabaseAdmin
+          .from('etkinlik_belgeleri')
+          .delete()
+          .eq('id', belgeId)
+          .select();
+        
+        if (dbError) {
+          console.error('❌ Belge bilgisi silinirken hata:', dbError);
+          throw new Error(`DB silme hatası: ${dbError.message}`);
+        }
+        
+        console.log(`✅ Belge sadece DB'den silindi (storage yolu bulunamadı)`);
+        return true;
+      }
+      
+      // DB'den alınan dosya yolunu kullan
+      dosyaYolu = belgeData.dosya_yolu;
+      console.log(`📁 DB'den alınan dosya yolu: "${dosyaYolu}"`);
+    }
+    
     const pathParts = dosyaYolu.split('/');
-    if (pathParts.length < 4) {
-      console.error('Geçersiz dosya yolu formatı. Beklenen format: kulupId/basvuruId/tip/dosyaAdi');
-      throw new Error('Geçersiz dosya yolu formatı');
+    if (pathParts.length < 3) {
+      console.warn('⚠️ Dosya yolu formatı beklenenden farklı, sadece veritabanından siliniyor...');
+      console.log(`📊 Dosya yolu parçaları: [${pathParts.join(', ')}]`);
+      
+      // Sadece veritabanından sil
+      const { error: dbError } = await supabaseAdmin
+        .from('etkinlik_belgeleri')
+        .delete()
+        .eq('id', belgeId)
+        .select();
+      
+      if (dbError) {
+        console.error('❌ Belge bilgisi silinirken hata:', dbError);
+        throw new Error(`DB silme hatası: ${dbError.message}`);
+      }
+      
+      console.log(`✅ Belge sadece DB'den silindi (dosya yolu formatı: ${pathParts.length} parça)`);
+      return true;
     }
     
     // Kullanıcının kulüp ile ilişkisini kontrol et - yalnızca kendi kulübünün belgelerini silebilmeli
     const kulupId = pathParts[0];
     const basvuruId = pathParts[1];
     
-    console.log(`Belge silme işlemi: KulüpID: ${kulupId}, BaşvuruID: ${basvuruId}`);
+    console.log(`🔄 Belge silme işlemi: KulüpID: ${kulupId}, BaşvuruID: ${basvuruId}`);
     
-    // Önce veritabanından belge bilgisini sil
-    const { error: dbError } = await supabase
+    // 1️⃣ Önce veritabanından belge bilgisini sil - ADMIN CLIENT kullan (RLS bypass için)
+    const { data: deletedRows, error: dbError } = await supabaseAdmin
       .from('etkinlik_belgeleri')
       .delete()
-      .eq('id', belgeId);
+      .eq('id', belgeId)
+      .select();
     
     if (dbError) {
-      console.error('Belge bilgisi silinirken hata:', dbError);
-      throw dbError;
+      console.error('❌ Belge bilgisi silinirken hata:', dbError);
+      throw new Error(`DB silme hatası: ${dbError.message}`);
     }
     
-    // Storage'dan dosyayı sil
-    const { error: storageError } = await supabase.storage
-      .from('etkinlik-belgeleri') // alt çizgi (_) yerine tire (-) kullan
+    if (!deletedRows || deletedRows.length === 0) {
+      console.error('❌ Silinecek belge bulunamadı. Belge ID:', belgeId);
+      throw new Error('Silinecek belge veritabanında bulunamadı');
+    }
+    
+    console.log(`✅ Belge DB'den silindi, silinen satır sayısı: ${deletedRows.length}`);
+    
+    // 2️⃣ Storage'dan dosyayı sil - ADMIN CLIENT kullan
+    try {
+      const { data: storageData, error: storageError } = await supabaseAdmin.storage
+        .from('etkinlik-belgeleri')
+        .remove([dosyaYolu]);
+      
+      if (storageError) {
+        console.error('❌ Dosya storage\'dan silinirken hata:', storageError);
+        console.error('Hata detayları:', JSON.stringify(storageError));
+        console.warn('⚠️ Belge veritabanından silindi ancak dosya storage\'dan silinemedi.');
+        // Storage hatası olsa bile DB silme başarılıysa true döndür
+      } else {
+        console.log(`✅ Dosya storage'dan silindi:`, storageData);
+      }
+    } catch (storageException) {
+      console.error('💥 Storage silme işlemi sırasında exception:', storageException);
+      console.warn('⚠️ Belge veritabanından silindi ancak storage silmede exception oluştu.');
+      // Exception olsa bile DB silme başarılıysa devam et
+    }
+    
+    console.log('🎉 Belge başarıyla silindi (hem DB\'den hem storage\'dan).');
+    return true;
+  } catch (error) {
+    console.error('💥 Belge silme işlemi başarısız:', error);
+    return false;
+  }
+};
+
+// Ek belge sil (hem veritabanından hem storage'dan)
+export const ekBelgeSil = async (belgeId: string, dosyaYolu: string): Promise<boolean> => {
+  try {
+    console.log(`🗑️ ID: ${belgeId} olan ek belge siliniyor...`);
+    console.log(`📁 Dosya yolu: ${dosyaYolu}`);
+    
+    // Dosya yolu kontrolü
+    if (!dosyaYolu || typeof dosyaYolu !== 'string') {
+      console.error('Geçersiz dosya yolu');
+      throw new Error('Geçersiz dosya yolu');
+    }
+    
+    console.log(`🔄 Ek belge silme işlemi: DosyaYolu: ${dosyaYolu}`);
+    
+    // 1️⃣ Önce veritabanından belge bilgisini sil - ADMIN CLIENT kullan (RLS bypass için)
+    const { data: deletedRows, error: dbError } = await supabaseAdmin
+      .from('ek_belgeler')
+      .delete()
+      .eq('id', belgeId)
+      .select();
+    
+    if (dbError) {
+      console.error('❌ Ek belge bilgisi silinirken hata:', dbError);
+      throw new Error(`DB silme hatası: ${dbError.message}`);
+    }
+    
+    if (!deletedRows || deletedRows.length === 0) {
+      console.error('❌ Silinecek ek belge bulunamadı. Belge ID:', belgeId);
+      throw new Error('Silinecek ek belge veritabanında bulunamadı');
+    }
+    
+    console.log(`✅ Ek belge DB'den silindi, silinen satır sayısı: ${deletedRows.length}`);
+    
+    // 2️⃣ Storage'dan dosyayı sil - ADMIN CLIENT kullan
+    const { data: storageData, error: storageError } = await supabaseAdmin.storage
+      .from('ek-belgeler') // ek belgeler bucket'ı
       .remove([dosyaYolu]);
     
     if (storageError) {
-      console.error('Dosya silinirken hata:', storageError);
+      console.error('❌ Ek belge dosyası storage\'dan silinirken hata:', storageError);
       console.error('Hata detayları:', JSON.stringify(storageError));
-      console.warn('Belge veritabanından silindi ancak dosya storage\'dan silinemedi.');
+      console.warn('⚠️ Ek belge veritabanından silindi ancak dosya storage\'dan silinemedi.');
+      // Storage hatası olsa bile DB silme başarılıysa true döndür
+    } else {
+      console.log(`✅ Ek belge dosyası storage'dan silindi:`, storageData);
     }
     
-    console.log('Belge başarıyla silindi.');
+    console.log('🎉 Ek belge başarıyla silindi (hem DB\'den hem storage\'dan).');
     return true;
   } catch (error) {
-    console.error('Belge silme işlemi başarısız:', error);
+    console.error('💥 Ek belge silme işlemi başarısız:', error);
     return false;
   }
 };
@@ -2000,21 +2096,28 @@ const updateBesvuruBelgeleri = async (
             continue; // Değişiklik yok, bu belgeyi atla
           } else {
             console.log(`🔄 ${yeniBelgeTip} belgesi değişmiş, güncelleniyor:`, {
-              eski: mevcutBelge.dosya_adi,
-              yeni: yeniBelgeAdi,
+              eski: {
+                dosyaAdi: mevcutBelge.dosya_adi,
+                dosyaYolu: mevcutBelge.dosya_yolu,
+                belgeId: mevcutBelge.id
+              },
+              yeni: {
+                dosyaAdi: yeniBelgeAdi,
+                dosyaYolu: yeniBelgeYolu
+              },
               onaySifirlaniyor: 'Yeni belge yüklendi, onay süreci sıfırlandı'
             });
             
-            // Eski belgeyi sil
-    const { error: silmeError } = await client
-      .from('etkinlik_belgeleri')
-      .delete()
-              .eq('id', mevcutBelge.id);
-    
-    if (silmeError) {
-              console.error(`❌ Eski ${yeniBelgeTip} belgesi silinirken hata:`, silmeError);
-      throw silmeError;
-    }
+            // Eski belgeyi hem veritabanından hem storage'dan sil
+            console.log(`🔄 Eski ${yeniBelgeTip} belgesi siliniyor: ID=${mevcutBelge.id}, Yol=${mevcutBelge.dosya_yolu}`);
+            const eskiBelgeBasariliSilindi = await etkinlikBelgeSil(mevcutBelge.id, mevcutBelge.dosya_yolu);
+            
+            if (!eskiBelgeBasariliSilindi) {
+              console.error(`❌ Eski ${yeniBelgeTip} belgesi silinirken hata oluştu`);
+              throw new Error(`Eski ${yeniBelgeTip} belgesi silinemedi`);
+            }
+            
+            console.log(`🗑️ Eski ${yeniBelgeTip} belgesi hem DB'den hem storage'dan silindi`);
     
             // Yeni belgeyi temiz onay durumu ile ekle (belge değiştiği için onay süreci sıfırlanır)
             const { error: eklemeError } = await client

@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, FileDown, Users, Calendar, X, Eye, FileText, LogOut, AlertCircle, Trash2 } from 'lucide-react';
-import { EtkinlikBasvuru, Kulup, EkBelge } from '../types';
-import { getBasvurular, getBasvurularSKSOptimized, updateBasvuru, getKulupler, etkinlikBelgeIndir, belgeOnayla, belgeReddet, ekBelgeIndir, ekBelgeOnayla, ekBelgeReddet, temizleTekrarOnaylari } from '../utils/supabaseStorage';
+import { Search, CheckCircle, XCircle, FileDown, Users, Calendar, X, Eye, LogOut, AlertCircle, Trash2 } from 'lucide-react';
+import { EtkinlikBasvuru, Kulup } from '../types';
+import { getBasvurular, getBasvurularSKSOptimized, updateBasvuru, getKulupler, etkinlikBelgeIndir, belgeOnayla, belgeReddet, temizleTekrarOnaylari } from '../utils/supabaseStorage';
 import { generatePDF } from '../utils/pdf';
 import { Takvim } from './Takvim';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
-import { EkBelgeListesi } from './EkBelgeListesi';
+
 import { sendSksOnayNotification, sendSksRedNotification } from '../utils/emailService';
 
-// Genişletilmiş EkBelge tipi - etkinlik bilgilerini içerir
-interface ExtendedEkBelge extends EkBelge {
-  etkinlikAdi: string;
-  kulupAdi: string;
-}
+
 
 export const SKSPaneli: React.FC = () => {
   const navigate = useNavigate();
@@ -35,10 +31,8 @@ export const SKSPaneli: React.FC = () => {
   const [tumBasvurular, setTumBasvurular] = useState<EtkinlikBasvuru[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showEkBelgeYonetimi, setShowEkBelgeYonetimi] = useState(false);
-  const [ekBelgesiOlanEtkinlikler, setEkBelgesiOlanEtkinlikler] = useState<EtkinlikBasvuru[]>([]);
-  const [bekleyenEkBelgeSayisi, setBekleyenEkBelgeSayisi] = useState(0);
-  const [tumEkBelgeler, setTumEkBelgeler] = useState<ExtendedEkBelge[]>([]);
+
+
   // const [belgeFiltresi] = useState<'hepsi' | 'bekleyen' | 'onaylanan' | 'reddedilen'>('hepsi');
   // const [belgeSiralama] = useState<'yeni' | 'eski'>('yeni');
   // const [activeRedBelgeId] = useState<string | null>(null);
@@ -60,46 +54,7 @@ export const SKSPaneli: React.FC = () => {
         if (Array.isArray(allBasvurular)) {
           console.log('Tüm başvurular:', allBasvurular.length);
           
-          // Ek belgesi olan etkinlikleri filtrele - daha geniş bir filtreleme kullanıyoruz
-          const ekBelgesiOlanlar = allBasvurular.filter(basvuru => {
-            const hasEkBelgeler = basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0;
-            if (hasEkBelgeler) {
-              console.log(`Ek belgesi olan etkinlik bulundu: ${basvuru.id} - ${basvuru.etkinlikAdi}`);
-              console.log('Ek belgeler:', basvuru.ekBelgeler);
-            }
-            return hasEkBelgeler;
-          });
-          
-          console.log('Ek belgesi olan etkinlikler:', ekBelgesiOlanlar.length);
-          setEkBelgesiOlanEtkinlikler(ekBelgesiOlanlar);
-          
-          // Tüm ek belgeleri düz bir listede topla (yalnızca danışman onayından geçenler SKS'e düşsün)
-          const tumBelgeler: ExtendedEkBelge[] = [];
-          allBasvurular.forEach(basvuru => {
-            if (basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0) {
-              basvuru.ekBelgeler
-                .filter(belge => belge.danismanOnay?.durum === 'Onaylandı')
-                .forEach(belge => {
-                  tumBelgeler.push({
-                    ...belge,
-                    etkinlikAdi: basvuru.etkinlikAdi,
-                    kulupAdi: basvuru.kulupAdi
-                  });
-                });
-            }
-          });
-          
-          console.log('Toplam ek belge sayısı:', tumBelgeler.length);
-          setTumEkBelgeler(tumBelgeler);
-          
-          // Onaylanmamış ek belgesi olan başvuruları tespit et
-          const onaylanmamisEkBelgesiOlanlar = allBasvurular.filter(basvuru => 
-            basvuru.ekBelgeler && 
-            basvuru.ekBelgeler.some(belge => belge.danismanOnay?.durum === 'Onaylandı' && !belge.sksOnay)
-          );
-          
-          console.log('Onaylanmamış ek belgesi olan etkinlikler:', onaylanmamisEkBelgesiOlanlar.length);
-          setBekleyenEkBelgeSayisi(onaylanmamisEkBelgesiOlanlar.length);
+
           
           // 1️⃣ ONAY BEKLEYEN ETKİNLİKLER (Danışman onaylı, SKS etkinlik onayı yok)
           const bekleyenEtkinlikler = allBasvurular.filter(b => {
@@ -138,8 +93,12 @@ export const SKSPaneli: React.FC = () => {
           const onaylananlar = allBasvurular.filter(b => {
             const danismanOnayli = b.danismanOnay?.durum === 'Onaylandı';
             const sksEtkinlikOnayli = b.sksOnay?.durum === 'Onaylandı';
-            const tumAnaBelgelerOnayli = (b.belgeler || []).every(doc => doc.sksOnay?.durum === 'Onaylandı');
-            const tumEkBelgelerOnayli = (b.ekBelgeler || []).every(ek => ek.sksOnay?.durum === 'Onaylandı');
+            // Sadece danışman onaylı etkinlik belgeleri arasından SKS onayını kontrol et
+            const danismanOnayliAnaBelgeler = (b.belgeler || []).filter(doc => doc.danismanOnay?.durum === 'Onaylandı');
+            const tumAnaBelgelerOnayli = danismanOnayliAnaBelgeler.length === 0 || danismanOnayliAnaBelgeler.every(doc => doc.sksOnay?.durum === 'Onaylandı');
+            // Sadece danışman onaylı ek belgeler arasından SKS onayını kontrol et
+            const danismanOnayliEkBelgeler = (b.ekBelgeler || []).filter(ek => ek.danismanOnay?.durum === 'Onaylandı');
+            const tumEkBelgelerOnayli = danismanOnayliEkBelgeler.length === 0 || danismanOnayliEkBelgeler.every(ek => ek.sksOnay?.durum === 'Onaylandı');
             
             return danismanOnayli && sksEtkinlikOnayli && tumAnaBelgelerOnayli && tumEkBelgelerOnayli;
           });
@@ -207,39 +166,10 @@ export const SKSPaneli: React.FC = () => {
     }
   };
 
-  const handleEkBelgeIndir = async (dosya: string, dosyaAdi: string) => {
-    try {
-      const downloadUrl = await ekBelgeIndir(dosya);
-      if (downloadUrl) {
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = dosyaAdi;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      } else {
-        alert('Belge indirilemedi. Lütfen daha sonra tekrar deneyin.');
-      }
-    } catch (error) {
-      console.error('Belge indirme hatası:', error);
-      alert('Belge indirme işlemi sırasında bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
-    }
-  };
+
 
   // OPTIMIZE: Optimistic update - sayfa yenilenmeden state güncelleme
   const updateBelgeStateOptimistic = (belgeId: string, yeniOnayDurumu: any, belgeType: 'etkinlik' | 'ek') => {
-    if (belgeType === 'ek') {
-      // Ek belgeleri güncelle
-      setTumEkBelgeler(prev => prev.map(belge => 
-        belge.id === belgeId 
-          ? { ...belge, sksOnay: yeniOnayDurumu }
-          : belge
-      ));
-      
-      // Bekleyen sayıları güncelle
-      setBekleyenEkBelgeSayisi(prev => yeniOnayDurumu ? prev - 1 : prev);
-    }
-    
     if (belgeType === 'etkinlik') {
       // Ana başvuru listelerindeki belgeleri güncelle
       const updateBasvurular = (basvuruList: EtkinlikBasvuru[]) => 
@@ -267,76 +197,12 @@ export const SKSPaneli: React.FC = () => {
           belge.id === belgeId
             ? { ...belge, sksOnay: yeniOnayDurumu }
             : belge
-        ),
-        ekBelgeler: prev.ekBelgeler?.map(belge =>
-          belge.id === belgeId
-            ? { ...belge, sksOnay: yeniOnayDurumu }
-            : belge
         )
       } : null);
     }
   };
 
-  const handleEkBelgeOnayla = async (belgeId: string) => {
-    try {
-      // OPTIMIZE: Optimistic update - UI'yı hemen güncelle
-      const onayBilgisi = {
-        durum: 'Onaylandı' as const,
-        tarih: new Date().toISOString(),
-        redSebebi: undefined
-      };
-      
-      updateBelgeStateOptimistic(belgeId, onayBilgisi, 'ek');
-      
-      // API çağrısını yap
-      const success = await ekBelgeOnayla(belgeId, 'SKS');
-      
-      if (success) {
-        alert('Belge başarıyla onaylandı.');
-      } else {
-        // Başarısız olursa eski haline döndür
-        updateBelgeStateOptimistic(belgeId, null, 'ek');
-        alert('Belge onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
-      }
-    } catch (error) {
-      console.error('Belge onaylama hatası:', error);
-      alert('Belge onaylanırken bir hata oluştu. Lütfen tekrar deneyiniz.');
-    }
-  };
 
-  const handleEkBelgeReddet = async (belgeId: string, redSebebi: string) => {
-    try {
-      if (!redSebebi.trim()) {
-        alert('Lütfen red sebebini belirtiniz!');
-        return;
-      }
-      
-      // OPTIMIZE: Optimistic update - UI'yı hemen güncelle
-      const redBilgisi = {
-        durum: 'Reddedildi' as const,
-        tarih: new Date().toISOString(),
-        redSebebi: redSebebi
-      };
-      
-      updateBelgeStateOptimistic(belgeId, redBilgisi, 'ek');
-      
-      // API çağrısını yap
-      const success = await ekBelgeReddet(belgeId, 'SKS', redSebebi);
-      
-      if (success) {
-        alert('Belge başarıyla reddedildi.');
-      } else {
-        // Başarısız olursa eski haline döndür
-        updateBelgeStateOptimistic(belgeId, null, 'ek');
-        alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
-      }
-    } catch (error) {
-      console.error('Belge reddetme hatası:', error);
-      // Hata durumunda da eski haline döndür
-      updateBelgeStateOptimistic(belgeId, null, 'ek');
-      alert('Belge reddedilirken bir hata oluştu. Lütfen tekrar deneyiniz.');
-    }
-  };
 
   // OPTIMIZE: Normal belge onaylama işlemi
   const handleBelgeOnayla = async (belgeId: string) => {
@@ -438,10 +304,14 @@ export const SKSPaneli: React.FC = () => {
       
       updateEtkinlikStateOptimistic(basvuru, onayBilgisi);
       
-      // API çağrısı
+      // API çağrısı - SADECE ETKİNLİK ONAYINI GÜNCELLE, BELGELER DOKUNULMASİN
+      const { belgeler, ekBelgeler, ...etkinlikBilgileri } = basvuru;
       const guncelBasvuru: EtkinlikBasvuru = {
-        ...basvuru,
-        sksOnay: onayBilgisi
+        ...etkinlikBilgileri,
+        sksOnay: onayBilgisi,
+        // Belgeleri çıkar - sadece etkinlik onayını güncelle
+        belgeler: undefined,
+        ekBelgeler: undefined
       };
       
       await updateBasvuru(guncelBasvuru);
@@ -483,10 +353,14 @@ export const SKSPaneli: React.FC = () => {
       setSecilenBasvuru(null);
       setRedSebebi('');
       
-      // API çağrısı
+      // API çağrısı - SADECE ETKİNLİK ONAYINI GÜNCELLE, BELGELER DOKUNULMASİN
+      const { belgeler, ekBelgeler, ...etkinlikBilgileri } = secilenBasvuru;
       const guncelBasvuru: EtkinlikBasvuru = {
-        ...secilenBasvuru,
-        sksOnay: redBilgisi
+        ...etkinlikBilgileri,
+        sksOnay: redBilgisi,
+        // Belgeleri çıkar - sadece etkinlik onayını güncelle
+        belgeler: undefined,
+        ekBelgeler: undefined
       };
       
       await updateBasvuru(guncelBasvuru);
@@ -551,19 +425,9 @@ export const SKSPaneli: React.FC = () => {
     }
   };
 
-  const refreshBasvurular = async () => {
-    try {
-      const guncelBasvurular = await getBasvurular();
-      
-      // SKS onayı bekleyen başvurular (danışman onaylı ama SKS onaysız)
-      const bekleyenBasvurular = guncelBasvurular.filter(b => 
-        b.danismanOnay?.durum === 'Onaylandı' && !b.sksOnay
-      );
-      setBasvurular(bekleyenBasvurular);
-    } catch (error) {
-      console.error('Başvuruları yenileme hatası:', error);
-    }
-  };
+  // refreshBasvurular fonksiyonunu fetchBasvurular ile değiştiriyoruz
+  // Tüm state'lerin tutarlı şekilde güncellenmesi için
+  const refreshBasvurular = fetchBasvurular;
 
   if (loading) {
     return (
@@ -593,18 +457,7 @@ export const SKSPaneli: React.FC = () => {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h1 className="text-2xl font-bold text-gray-800">SKS Onay Paneli</h1>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            <button
-              onClick={() => setShowEkBelgeYonetimi(true)}
-              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex-grow sm:flex-grow-0"
-            >
-              <FileText className="w-4 h-4" />
-              Ek Belge Yönetimi
-              {bekleyenEkBelgeSayisi > 0 && (
-                <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                  {bekleyenEkBelgeSayisi}
-                </span>
-              )}
-            </button>
+
             <button
               onClick={() => setShowEtkinlikler(true)}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex-grow sm:flex-grow-0"
@@ -651,13 +504,15 @@ export const SKSPaneli: React.FC = () => {
               </h2>
               <div className="space-y-4">
                 {filtrelenmisBasvurular.map((basvuru) => {
-                  // Belgeler arasında reddedilmiş veya onaylanmamış belge var mı kontrol et
-                  const hasRejectedDocuments = basvuru.belgeler && basvuru.belgeler.some(belge => belge.sksOnay?.durum === 'Reddedildi');
-                  const hasUnreviewedDocuments = basvuru.belgeler && basvuru.belgeler.some(belge => !belge.sksOnay);
+                  // Sadece danışman onaylı belgeler arasında SKS durumunu kontrol et
+                  const danismanOnayliEtkinlikBelgeleri = (basvuru.belgeler || []).filter(belge => belge.danismanOnay?.durum === 'Onaylandı');
+                  const hasRejectedDocuments = danismanOnayliEtkinlikBelgeleri.some(belge => belge.sksOnay?.durum === 'Reddedildi');
+                  const hasUnreviewedDocuments = danismanOnayliEtkinlikBelgeleri.some(belge => !belge.sksOnay);
                   
-                  // Ek belgeleri var mı kontrol et
-                  const hasAdditionalDocs = basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0;
-                  const hasUnreviewedAdditionalDocs = hasAdditionalDocs && basvuru.ekBelgeler && basvuru.ekBelgeler.some(belge => !belge.sksOnay);
+                  // Sadece danışman onaylı ek belgeler arasında SKS durumunu kontrol et
+                  const danismanOnayliEkBelgeler = (basvuru.ekBelgeler || []).filter(belge => belge.danismanOnay?.durum === 'Onaylandı');
+                  const hasAdditionalDocs = danismanOnayliEkBelgeler.length > 0;
+                  const hasUnreviewedAdditionalDocs = danismanOnayliEkBelgeler.some(belge => !belge.sksOnay);
 
                   
                   return (
@@ -957,40 +812,13 @@ export const SKSPaneli: React.FC = () => {
                 }}
                 userRole="sks"
                 showEkBelgeler={false}
-                onEkBelgeGuncellendi={() => {
-                  // Etkinliği yeniden yükle
-                  getBasvurular().then(guncelBasvurular => {
-                    const guncelBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
-                    if (guncelBasvuru) {
-                      setDetayBasvuru(guncelBasvuru);
-                      
-                      // Ek belge listelerini güncelle
-                      const ekBelgesiOlanlar = guncelBasvurular.filter(basvuru => 
-                        basvuru.ekBelgeler && 
-                        basvuru.ekBelgeler.length > 0
-                      );
-                      
-                      const onaylanmamisEkBelgesiOlanlar = guncelBasvurular.filter(basvuru => 
-                        basvuru.ekBelgeler && 
-                        basvuru.ekBelgeler.some(belge => !belge.sksOnay)
-                      );
-                      
-                      setEkBelgesiOlanEtkinlikler(ekBelgesiOlanlar);
-                      setBekleyenEkBelgeSayisi(onaylanmamisEkBelgesiOlanlar.length);
-                      
-                      // Ana başvuru listesini de güncelle
-                      refreshBasvurular();
-                    }
-                  });
+                                onEkBelgeGuncellendi={() => {
+                  // Tüm verileri yeniden yükle
+                  refreshBasvurular();
                 }}
               />
               
-              {/* Belgeler hakkında bilgilendirme */}
-              {detayBasvuru.ekBelgeler && detayBasvuru.ekBelgeler.length > 0 && (
-                <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800">
-                  <strong>Bilgi:</strong> Bu başvurunun ek belgeleri var. Belgeleri "Ek Belge Yönetimi" bölümünden inceleyebilirsiniz.
-                </div>
-              )}
+
 
               {/* Diğer bilgilendirmeler */}
               {detayBasvuru.belgeler && detayBasvuru.belgeler.some(belge => belge.sksOnay?.durum === 'Reddedildi') && (
@@ -1060,9 +888,12 @@ export const SKSPaneli: React.FC = () => {
                     {filtrelenmisEtkinlikler
                       .filter(b => b.sksOnay?.durum === 'Onaylandı')
                       .map(basvuru => {
+                        // Sadece danışman onaylı belgeler arasında SKS onayı bekleyenleri kontrol et
+                        const danismanOnayliEtkinlikBelgeleri = (basvuru.belgeler || []).filter(b => b.danismanOnay?.durum === 'Onaylandı');
+                        const danismanOnayliEkBelgeler = (basvuru.ekBelgeler || []).filter(b => b.danismanOnay?.durum === 'Onaylandı');
                         const hasUnapprovedForSks =
-                          (basvuru.belgeler && basvuru.belgeler.some(b => !b.sksOnay)) ||
-                          (basvuru.ekBelgeler && basvuru.ekBelgeler.some(b => !b.sksOnay));
+                          danismanOnayliEtkinlikBelgeleri.some(b => !b.sksOnay) ||
+                          danismanOnayliEkBelgeler.some(b => !b.sksOnay);
                         return (
                         <div key={basvuru.id} className="p-4 border rounded-lg">
                           <div className="font-medium text-gray-800 flex items-center gap-2">
@@ -1131,48 +962,7 @@ export const SKSPaneli: React.FC = () => {
           </div>
         )}
 
-        {/* Ek Belge Yönetimi Modal */}
-        {showEkBelgeYonetimi && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl p-4 sm:p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-800">Ek Belge Yönetimi</h3>
-                <button
-                  onClick={() => setShowEkBelgeYonetimi(false)}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
 
-              {bekleyenEkBelgeSayisi > 0 && (
-                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 rounded-md">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <AlertCircle className="h-5 w-5 text-yellow-400" />
-                    </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-yellow-700">
-                        <span className="font-medium">Dikkat!</span> {bekleyenEkBelgeSayisi} adet onay bekleyen ek belge bulunuyor.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <EkBelgeListesi
-                ekBelgeler={tumEkBelgeler}
-                etkinlikler={ekBelgesiOlanEtkinlikler}
-                userRole="sks"
-                onBelgeIndir={handleEkBelgeIndir}
-                onBelgeOnayla={handleEkBelgeOnayla}
-                onBelgeReddet={handleEkBelgeReddet}
-                onViewEtkinlik={(etkinlik) => setDetayBasvuru(etkinlik)}
-                bekleyenBelgeSayisi={bekleyenEkBelgeSayisi}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Başvuru Detay Modal */}
         {detayBasvuru && (
@@ -1189,7 +979,7 @@ export const SKSPaneli: React.FC = () => {
                 
                 // Detay gösterilen başvuruyu güncelle
                 if (detayBasvuru) {
-                  const guncelBasvurular = await getBasvurular();
+                  const guncelBasvurular = await getBasvurularSKSOptimized(50, 0);
                   const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
                   if (guncelDetayBasvuru) {
                     setDetayBasvuru(guncelDetayBasvuru);
@@ -1205,7 +995,7 @@ export const SKSPaneli: React.FC = () => {
                 
                 // Detay gösterilen başvuruyu güncelle
                 if (detayBasvuru) {
-                  const guncelBasvurular = await getBasvurular();
+                  const guncelBasvurular = await getBasvurularSKSOptimized(50, 0);
                   const guncelDetayBasvuru = guncelBasvurular.find(b => b.id === detayBasvuru.id);
                   if (guncelDetayBasvuru) {
                     setDetayBasvuru(guncelDetayBasvuru);

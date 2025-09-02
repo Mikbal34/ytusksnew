@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { FileDown, CheckCircle, XCircle, AlertCircle, Upload, Plus, X, Download, Clock, File } from 'lucide-react';
+import { CheckCircle, XCircle, Upload, Plus, X, Download, Clock, File } from 'lucide-react';
 import { EtkinlikBasvuru, EkBelge } from '../types';
-import { ekBelgeYukle, getEkBelgeler, ekBelgeIndir, ekBelgeOnayla, ekBelgeReddet } from '../utils/supabaseStorage';
+import { ekBelgeYukle, getEkBelgeler, ekBelgeIndir, ekBelgeOnayla, ekBelgeReddet, ekBelgeSil } from '../utils/supabaseStorage';
 
 interface EkBelgeYonetimiProps {
   etkinlik: EtkinlikBasvuru;
@@ -26,6 +26,15 @@ export function EkBelgeYonetimi({ etkinlik, userRole, onEkBelgeGuncellendi }: Ek
   const [uploading, setUploading] = useState(false);
   const [activeRedBelgeId, setActiveRedBelgeId] = useState<string | null>(null);
   const [redSebebi, setRedSebebi] = useState('');
+  const [activeDegistirBelgeId, setActiveDegistirBelgeId] = useState<string | null>(null);
+  const [degistirBelge, setDegistirBelge] = useState<{
+    dosya: File | null;
+    aciklama: string;
+  }>({
+    dosya: null,
+    aciklama: ''
+  });
+  const [degistirUploading, setDegistirUploading] = useState(false);
 
   useEffect(() => {
     const fetchEkBelgeler = async () => {
@@ -226,6 +235,86 @@ export function EkBelgeYonetimi({ etkinlik, userRole, onEkBelgeGuncellendi }: Ek
     } catch (error) {
       console.error('Belge reddetme hatası:', error);
       alert('Belge reddedilirken bir hata oluştu');
+    }
+  };
+
+  // Belge değiştirme fonksiyonları
+  const handleBelgeDegistirBaslat = (belge: EkBelge) => {
+    setActiveDegistirBelgeId(belge.id || '');
+    setDegistirBelge({
+      dosya: null,
+      aciklama: belge.aciklama || ''
+    });
+  };
+  
+  const handleBelgeDegistirIptal = () => {
+    setActiveDegistirBelgeId(null);
+    setDegistirBelge({
+      dosya: null,
+      aciklama: ''
+    });
+  };
+
+  const handleDegistirFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setDegistirBelge({
+        ...degistirBelge,
+        dosya: e.target.files[0]
+      });
+    }
+  };
+
+  const handleBelgeDegistir = async (eskiBelge: EkBelge) => {
+    if (!degistirBelge.dosya || !eskiBelge.id || !eskiBelge.dosya || typeof eskiBelge.dosya !== 'string') {
+      alert('Dosya seçin ve eski belge bilgileri doğru olduğundan emin olun');
+      return;
+    }
+
+    try {
+      setDegistirUploading(true);
+
+      // 1. Önce eski belgeyi sil (hem DB'den hem storage'dan)
+      const eskiBelgeBasariliSilindi = await ekBelgeSil(eskiBelge.id, eskiBelge.dosya);
+      
+      if (!eskiBelgeBasariliSilindi) {
+        throw new Error('Eski belge silinemedi');
+      }
+
+      console.log('Eski belge başarıyla silindi, yeni belge yükleniyor...');
+
+      // 2. Yeni belgeyi yükle  
+      const yeniBelgeData = {
+        etkinlikId: etkinlik.id,
+        tip: eskiBelge.tip,
+        aciklama: degistirBelge.aciklama,
+        dosya: degistirBelge.dosya,
+        dosyaAdi: degistirBelge.dosya.name
+      };
+
+      const uploadResult = await ekBelgeYukle(yeniBelgeData);
+      
+      if (!uploadResult) {
+        throw new Error('Yeni belge yüklenemedi');
+      }
+
+      alert('Belge başarıyla değiştirildi');
+      
+      // Belgeleri yeniden yükle
+      const belgeler = await getEkBelgeler(etkinlik.id);
+      setEkBelgeler(belgeler);
+      
+      // Formu temizle
+      handleBelgeDegistirIptal();
+      
+      // Üst bileşeni bilgilendir
+      if (onEkBelgeGuncellendi) {
+        onEkBelgeGuncellendi();
+      }
+    } catch (error) {
+      console.error('Belge değiştirme hatası:', error);
+      alert('Belge değiştirilirken bir hata oluştu');
+    } finally {
+      setDegistirUploading(false);
     }
   };
 
@@ -483,8 +572,87 @@ export function EkBelgeYonetimi({ etkinlik, userRole, onEkBelgeGuncellendi }: Ek
                       )}
                     </>
                   )}
+                  
+                  {/* Kulüp Başkanı için Belge Değiştir Butonu */}
+                  {userRole === 'kulup_baskani' && (
+                    <button
+                      onClick={() => handleBelgeDegistirBaslat(belge)}
+                      className="p-1.5 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded-md"
+                      title="Belgeyi Değiştir"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
+              
+              {/* Belge Değiştir Formu */}
+              {activeDegistirBelgeId === belge.id && (
+                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <h5 className="text-sm font-medium text-gray-900 mb-3">Belgeyi Değiştir</h5>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Açıklama</label>
+                      <textarea
+                        value={degistirBelge.aciklama}
+                        onChange={(e) => setDegistirBelge({...degistirBelge, aciklama: e.target.value})}
+                        placeholder="Belge ile ilgili not ekleyin (opsiyonel)"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        rows={2}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Yeni Dosya</label>
+                      <div className="mt-1 flex items-center">
+                        <label className="cursor-pointer bg-white py-2 px-3 border border-gray-300 rounded-md shadow-sm text-sm leading-4 font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                          <span>Dosya Seç</span>
+                          <input
+                            type="file"
+                            className="sr-only"
+                            onChange={handleDegistirFileChange}
+                            accept=".pdf,.doc,.docx,.xls,.xlsx"
+                          />
+                        </label>
+                        <span className="ml-3 text-sm text-gray-500">
+                          {degistirBelge.dosya ? degistirBelge.dosya.name : 'Dosya seçilmedi'}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-end space-x-2">
+                      <button
+                        type="button"
+                        onClick={handleBelgeDegistirIptal}
+                        className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      >
+                        İptal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBelgeDegistir(belge)}
+                        disabled={!degistirBelge.dosya || degistirUploading}
+                        className="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {degistirUploading ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Değiştiriliyor...
+                          </>
+                        ) : (
+                          'Değiştir'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="mt-2 flex items-center space-x-4">
                 <div className="flex items-center">

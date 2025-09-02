@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, Calendar, X, Search, Eye, LogOut, FileEdit, AlertCircle, Info } from 'lucide-react';
+import { CheckCircle, XCircle, Calendar, X, Search, Eye, LogOut, AlertCircle, Info } from 'lucide-react';
 import { EtkinlikBasvuru } from '../types';
 import { getBasvurular, updateBasvuru, etkinlikBelgeIndir, belgeOnayla, belgeReddet } from '../utils/supabaseStorage';
 import { sendDanismanOnayNotification, sendDanismanRedNotification } from '../utils/emailService';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
 // import { EkBelgeListesi } from './EkBelgeListesi';
-import { EkBelgeYonetimi } from './EkBelgeYonetimi';
+// GEÇİCİ OLARAK GİZLENDİ
+// import { EkBelgeYonetimi } from './EkBelgeYonetimi';
 
 export function DanismanEkrani() {
   const navigate = useNavigate();
@@ -20,16 +21,20 @@ export function DanismanEkrani() {
   const [tumBasvurular, setTumBasvurular] = useState<EtkinlikBasvuru[]>([]);
   const [etkinlikAramaMetni, setEtkinlikAramaMetni] = useState('');
   const [loading, setLoading] = useState(true);
-  const [bekleyenEkBelgeSayisi, setBekleyenEkBelgeSayisi] = useState(0);
-  const [showEkBelgeYonetimi, setShowEkBelgeYonetimi] = useState(false);
-  const [ekBelgesiOlanEtkinlikler, setEkBelgesiOlanEtkinlikler] = useState<EtkinlikBasvuru[]>([]);
+  // GEÇİCİ OLARAK GİZLENDİ - Ek belge yönetimi için state'ler
+  // const [bekleyenEkBelgeSayisi, setBekleyenEkBelgeSayisi] = useState(0);
+  // const [showEkBelgeYonetimi, setShowEkBelgeYonetimi] = useState(false);
+  // const [ekBelgesiOlanEtkinlikler, setEkBelgesiOlanEtkinlikler] = useState<EtkinlikBasvuru[]>([]);
   const [, setError] = useState<string | null>(null);
+  // GEÇİCİ OLARAK GİZLENDİ - Ek belge yönetimi için state
+  /*
   const [onaylanmamisEkBelgeler, setOnaylanmamisEkBelgeler] = useState<{
     etkinlikId: string;
     etkinlikAdi: string;
     kulupAdi: string;
     belgeSayisi: number;
   }[]>([]);
+  */
   const [etkinligiOnaylanmisBelgeleriBekleyen, setEtkinligiOnaylanmisBelgeleriBekleyen] = useState<{
     etkinlikId: string;
     etkinlikAdi: string;
@@ -58,7 +63,8 @@ export function DanismanEkrani() {
         if (Array.isArray(allBasvurular)) {
           console.log('Tüm başvurular:', allBasvurular.length);
           
-          // Ek belgesi olan etkinlikleri filtrele
+          // GEÇİCİ OLARAK GİZLENDİ - Ek belgesi olan etkinlikleri filtrele
+          /*
           const ekBelgesiOlanlar = allBasvurular.filter(basvuru => {
             const hasEkBelgeler = basvuru.ekBelgeler && basvuru.ekBelgeler.length > 0;
             if (hasEkBelgeler) {
@@ -79,6 +85,7 @@ export function DanismanEkrani() {
           
           console.log('Onaylanmamış ek belgesi olan etkinlikler:', onaylanmamisEkBelgesiOlanlar.length);
           setBekleyenEkBelgeSayisi(onaylanmamisEkBelgesiOlanlar.length);
+          */
           
           // 1️⃣ ONAY BEKLEYEN ETKİNLİKLER (Etkinlik onayı yok)
           const bekleyenEtkinlikler = allBasvurular.filter(b => {
@@ -450,6 +457,7 @@ export function DanismanEkrani() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
           <h1 className="text-xl sm:text-2xl font-bold text-gray-800">Danışman Onay Paneli</h1>
           <div className="flex gap-2 w-full sm:w-auto">
+            {/* GEÇİCİ OLARAK GİZLENDİ - EK BELGE YÖNETİMİ
             <button
               onClick={() => setShowEkBelgeYonetimi(true)}
               className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex-grow sm:flex-grow-0"
@@ -462,6 +470,8 @@ export function DanismanEkrani() {
                 </span>
               )}
             </button>
+            */}
+            {/* GEÇİCİ OLARAK GİZLENDİ - Onaylanmamış Belgeler butonu
             {onaylanmamisEkBelgeler.length > 0 && (
               <button
                 onClick={() => setShowEtkinlikler(true)}
@@ -475,6 +485,7 @@ export function DanismanEkrani() {
                 </span>
               </button>
             )}
+            */}
             <button
               onClick={() => setShowEtkinlikler(true)}
               className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex-grow sm:flex-grow-0"
@@ -585,12 +596,13 @@ export function DanismanEkrani() {
                   showEkBelgeler={false}
                 />
 
-                {/* Ek belge bilgilendirmesi */}
+                {/* GEÇİCİ OLARAK GİZLENDİ - Ek belge bilgilendirmesi
                 {secilenBasvuru.ekBelgeler && secilenBasvuru.ekBelgeler.length > 0 && (
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800">
                     <strong>Bilgi:</strong> Bu başvurunun ek belgeleri var. Belgeleri "Ek Belge Yönetimi" bölümünden inceleyebilirsiniz.
                   </div>
                 )}
+                */}
 
                                 {/* Etkinlik Onay/Red Bölümü - Sadece bekleyen etkinlikler için */}
                 {!secilenBasvuru.danismanOnay && (
@@ -845,7 +857,8 @@ export function DanismanEkrani() {
                   if (guncelBasvuru) {
                     setDetayBasvuru(guncelBasvuru);
                     
-                    // Ek belge listelerini güncelle
+                    // GEÇİCİ OLARAK GİZLENDİ - Ek belge listelerini güncelle
+                    /*
                     const ekBelgesiOlanlar = guncelBasvurular.filter(basvuru => 
                       basvuru.ekBelgeler && 
                       basvuru.ekBelgeler.length > 0
@@ -858,17 +871,19 @@ export function DanismanEkrani() {
                     
                     setEkBelgesiOlanEtkinlikler(ekBelgesiOlanlar);
                     setBekleyenEkBelgeSayisi(onaylanmamisEkBelgesiOlanlar.length);
+                    */
                   }
                 });
               }}
             />
             
-            {/* Bilgilendirme */}
+            {/* GEÇİCİ OLARAK GİZLENDİ - Bilgilendirme
             {detayBasvuru.ekBelgeler && detayBasvuru.ekBelgeler.length > 0 && (
               <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-800">
                 <strong>Bilgi:</strong> Bu başvurunun ek belgeleri var. Belgeleri "Ek Belge Yönetimi" bölümünden inceleyebilirsiniz.
               </div>
             )}
+            */}
 
             <div className="flex justify-end items-center pt-6 mt-6 border-t">
               <button
@@ -882,7 +897,7 @@ export function DanismanEkrani() {
         </div>
       )}
 
-      {/* Ek Belge Yönetimi Modalı */}
+      {/* GEÇİCİ OLARAK GİZLENDİ - Ek Belge Yönetimi Modalı 
       {showEkBelgeYonetimi && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
@@ -969,6 +984,7 @@ export function DanismanEkrani() {
           </div>
         </div>
       )}
+      */}
     </div>
   );
 }

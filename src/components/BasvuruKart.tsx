@@ -300,7 +300,11 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
               })()}
               {/* SKS Belgeleri */}
               {(() => {
-                const belgeler = (basvuru.belgeler || []).concat(basvuru.ekBelgeler || []);
+                // Sadece danışman onaylı belgeleri SKS'ye göster
+                const danismanOnayliEtkinlikBelgeleri = (basvuru.belgeler || []).filter(b => b.danismanOnay?.durum === 'Onaylandı');
+                const danismanOnayliEkBelgeler = (basvuru.ekBelgeler || []).filter(b => b.danismanOnay?.durum === 'Onaylandı');
+                const belgeler = danismanOnayliEtkinlikBelgeleri.concat(danismanOnayliEkBelgeler);
+                
                 if (belgeler.length === 0) {
                   return <span className="inline-flex items-center text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700">SKS: Belge Yok</span>;
                 }
