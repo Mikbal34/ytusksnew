@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, CheckCircle, XCircle, FileDown, Users, Calendar, X, Eye, LogOut, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, CheckCircle, XCircle, FileDown, Users, Calendar, X, Eye, LogOut, AlertCircle, Trash2, Edit3, Clock, CheckSquare } from 'lucide-react';
 import { EtkinlikBasvuru, Kulup } from '../types';
 import { getBasvurular, getBasvurularSKSOptimized, updateBasvuru, getKulupler, etkinlikBelgeIndir, belgeOnayla, belgeReddet, temizleTekrarOnaylari } from '../utils/supabaseStorage';
 import { generatePDF } from '../utils/pdf';
 import { Takvim } from './Takvim';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
+import { onaylaRevizyon, getRevizyonlar } from '../utils/revizyonService';
 
 import { sendSksOnayNotification, sendSksRedNotification } from '../utils/emailService';
 
@@ -38,6 +39,12 @@ export const SKSPaneli: React.FC = () => {
   // const [activeRedBelgeId] = useState<string | null>(null);
   const [temizlemeLoading, setTemizlemeLoading] = useState(false);
   const [takvimKey, setTakvimKey] = useState(0);
+  
+  // Revizyon state'leri
+  const [revizyonlar, setRevizyonlar] = useState<any[]>([]);
+  const [showRevizyonlar, setShowRevizyonlar] = useState(false);
+  const [revizyonRedSebebi, setRevizyonRedSebebi] = useState('');
+  const [secilenRevizyon, setSecilenRevizyon] = useState<any>(null);
 
   const handleLogout = async () => {
     await logout();
@@ -114,6 +121,13 @@ export const SKSPaneli: React.FC = () => {
           const kuluplerData = await getKulupler();
           console.log('Kulüpler alındı:', kuluplerData.length);
           setKulupler(kuluplerData);
+          
+          // Revizyonları getir
+          console.log('Revizyonlar getiriliyor...');
+          const revizyonlarData = await getRevizyonlar();
+          console.log('Revizyonlar alındı:', revizyonlarData.length);
+          setRevizyonlar(revizyonlarData);
+          
           setError(null);
         }
       } catch (error) {
@@ -429,6 +443,41 @@ export const SKSPaneli: React.FC = () => {
   // Tüm state'lerin tutarlı şekilde güncellenmesi için
   const refreshBasvurular = fetchBasvurular;
 
+  // Revizyon onaylama
+  const handleRevizyonOnayla = async (revizyonId: string) => {
+    try {
+      await onaylaRevizyon(revizyonId, 'SKS', true);
+      alert('Revizyon başarıyla onaylandı.');
+      // Revizyonları yenile
+      const guncelRevizyonlar = await getRevizyonlar();
+      setRevizyonlar(guncelRevizyonlar);
+    } catch (error) {
+      console.error('Revizyon onaylanırken hata:', error);
+      alert('Revizyon onaylanırken bir hata oluştu.');
+    }
+  };
+
+  // Revizyon reddetme
+  const handleRevizyonReddet = async (revizyonId: string) => {
+    if (!revizyonRedSebebi.trim()) {
+      alert('Lütfen red sebebini belirtiniz.');
+      return;
+    }
+    
+    try {
+      await onaylaRevizyon(revizyonId, 'SKS', false, revizyonRedSebebi);
+      alert('Revizyon başarıyla reddedildi.');
+      setRevizyonRedSebebi('');
+      setSecilenRevizyon(null);
+      // Revizyonları yenile
+      const guncelRevizyonlar = await getRevizyonlar();
+      setRevizyonlar(guncelRevizyonlar);
+    } catch (error) {
+      console.error('Revizyon reddedilirken hata:', error);
+      alert('Revizyon reddedilirken bir hata oluştu.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8 flex items-center justify-center">
@@ -464,6 +513,18 @@ export const SKSPaneli: React.FC = () => {
             >
               <Calendar className="w-4 h-4" />
               Tüm Etkinlikler
+            </button>
+            <button
+              onClick={() => setShowRevizyonlar(true)}
+              className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors flex-grow sm:flex-grow-0"
+            >
+              <Edit3 className="w-4 h-4" />
+              Revizyonlar
+              {revizyonlar.filter(r => r.durum === 'beklemede').length > 0 && (
+                <span className="bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                  {revizyonlar.filter(r => r.durum === 'beklemede').length}
+                </span>
+              )}
             </button>
             <button
               onClick={handleTemizleOnayKayitlari}
@@ -1004,6 +1065,233 @@ export const SKSPaneli: React.FC = () => {
               }
             }}
           />
+        )}
+
+        {/* Revizyonlar Modal */}
+        {showRevizyonlar && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-xl p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-semibold text-gray-800">Revizyon Onayları</h3>
+                <button
+                  onClick={() => setShowRevizyonlar(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {/* Bekleyen Revizyonlar */}
+                <div>
+                  <h4 className="text-lg font-medium text-gray-700 mb-4 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-yellow-600" />
+                    Bekleyen Revizyonlar
+                    <span className="bg-yellow-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+                      {revizyonlar.filter(r => r.durum === 'beklemede').length}
+                    </span>
+                  </h4>
+                  <div className="space-y-4">
+                    {revizyonlar
+                      .filter(r => r.durum === 'beklemede')
+                      .map((revizyon) => (
+                        <div key={revizyon.id} className="p-4 border border-yellow-200 rounded-lg bg-yellow-50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h5 className="font-medium text-gray-800">{revizyon.etkinlikAdi}</h5>
+                              <p className="text-sm text-gray-600">{revizyon.kulupAdi}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {revizyon.revize_gorsel && (
+                                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    📷 Görsel
+                                  </span>
+                                )}
+                                {revizyon.revize_konusmaci && (
+                                  <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    👥 Konuşmacılar
+                                  </span>
+                                )}
+                                {revizyon.revize_sponsor && (
+                                  <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    🏢 Sponsorlar
+                                  </span>
+                                )}
+                              </div>
+                              {revizyon.aciklama && (
+                                <p className="text-sm text-gray-600 mt-2">
+                                  <strong>Açıklama:</strong> {revizyon.aciklama}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-2">
+                                Talep Tarihi: {new Date(revizyon.created_at).toLocaleString('tr-TR')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <button
+                                onClick={() => handleRevizyonOnayla(revizyon.id)}
+                                className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition-colors"
+                              >
+                                <CheckCircle className="w-4 h-4" />
+                                Onayla
+                              </button>
+                              <button
+                                onClick={() => setSecilenRevizyon(revizyon)}
+                                className="flex items-center gap-2 bg-red-600 text-white px-3 py-1.5 rounded-lg hover:bg-red-700 transition-colors"
+                              >
+                                <XCircle className="w-4 h-4" />
+                                Reddet
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    {revizyonlar.filter(r => r.durum === 'beklemede').length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        Bekleyen revizyon bulunmuyor.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Onaylanan Revizyonlar */}
+                <div>
+                  <h4 className="text-lg font-medium text-gray-700 mb-4 flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5 text-green-600" />
+                    Onaylanan Revizyonlar
+                  </h4>
+                  <div className="space-y-4">
+                    {revizyonlar
+                      .filter(r => r.durum === 'onayli')
+                      .map((revizyon) => (
+                        <div key={revizyon.id} className="p-4 border border-green-200 rounded-lg bg-green-50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h5 className="font-medium text-gray-800">{revizyon.etkinlikAdi}</h5>
+                              <p className="text-sm text-gray-600">{revizyon.kulupAdi}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {revizyon.revize_gorsel && (
+                                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    📷 Görsel
+                                  </span>
+                                )}
+                                {revizyon.revize_konusmaci && (
+                                  <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    👥 Konuşmacılar
+                                  </span>
+                                )}
+                                {revizyon.revize_sponsor && (
+                                  <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    🏢 Sponsorlar
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                Onay Tarihi: {new Date(revizyon.updated_at).toLocaleString('tr-TR')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <span className="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                ✅ Onaylandı
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    {revizyonlar.filter(r => r.durum === 'onayli').length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        Onaylanan revizyon bulunmuyor.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Reddedilen Revizyonlar */}
+                <div>
+                  <h4 className="text-lg font-medium text-gray-700 mb-4 flex items-center gap-2">
+                    <XCircle className="w-5 h-5 text-red-600" />
+                    Reddedilen Revizyonlar
+                  </h4>
+                  <div className="space-y-4">
+                    {revizyonlar
+                      .filter(r => r.durum === 'reddedildi')
+                      .map((revizyon) => (
+                        <div key={revizyon.id} className="p-4 border border-red-200 rounded-lg bg-red-50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h5 className="font-medium text-gray-800">{revizyon.etkinlikAdi}</h5>
+                              <p className="text-sm text-gray-600">{revizyon.kulupAdi}</p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {revizyon.revize_gorsel && (
+                                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    📷 Görsel
+                                  </span>
+                                )}
+                                {revizyon.revize_konusmaci && (
+                                  <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    👥 Konuşmacılar
+                                  </span>
+                                )}
+                                {revizyon.revize_sponsor && (
+                                  <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                    🏢 Sponsorlar
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-2">
+                                Red Tarihi: {new Date(revizyon.updated_at).toLocaleString('tr-TR')}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                ❌ Reddedildi
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    {revizyonlar.filter(r => r.durum === 'reddedildi').length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        Reddedilen revizyon bulunmuyor.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Revizyon Red Modal */}
+        {secilenRevizyon && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Revizyon Red Sebebi</h3>
+              <textarea
+                value={revizyonRedSebebi}
+                onChange={(e) => setRevizyonRedSebebi(e.target.value)}
+                placeholder="Revizyonu reddetme sebebini giriniz..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-4"
+                rows={4}
+              />
+              <div className="flex justify-end gap-4">
+                <button
+                  onClick={() => {
+                    setSecilenRevizyon(null);
+                    setRevizyonRedSebebi('');
+                  }}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-700"
+                >
+                  İptal
+                </button>
+                <button
+                  onClick={() => handleRevizyonReddet(secilenRevizyon.id)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Revizyonu Reddet
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
