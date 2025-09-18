@@ -81,6 +81,7 @@ export function EtkinlikBasvuruFormu() {
   const belgeInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   // Mevcut belge satırındaki "Belgeyi Değiştir" aksiyonu için ayrı input ve index takibi
   const belgeReplaceInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  const [degistirilecekBelge, setDegistirilecekBelge] = useState<{tip: EtkinlikBelge['tip'], index: number} | null>(null);
 
   // Tarih girişleri için yıl aralığını sınırla
   const MIN_YEAR = 2000;
@@ -392,8 +393,9 @@ export function EtkinlikBasvuruFormu() {
     }
   };
 
-  // Mevcut belgeyi "değiştir" akışı: sadece geçici alana yeni dosyayı koyar, kullanıcı Ekle ile listeye ekler
-  const handleBelgeDegistirSec = (tip: EtkinlikBelge['tip']) => {
+  // Mevcut belgeyi "değiştir" akışı: hangi belgenin değiştirileceğini belirle
+  const handleBelgeDegistirSec = (tip: EtkinlikBelge['tip'], belgeIndex: number) => {
+    setDegistirilecekBelge({tip, index: belgeIndex});
     belgeReplaceInputRefs.current[tip]?.click();
   };
 
@@ -403,10 +405,15 @@ export function EtkinlikBasvuruFormu() {
     if (file.type !== 'application/pdf') { alert('Lütfen PDF yükleyin'); return; }
     if (file.size > 5 * 1024 * 1024) { alert('Dosya boyutu 5MBı aşmamalı'); return; }
     
-    // Sadece seçilen belgeyi veritabanından sil (aynı tipte birden fazla belge varsa sadece ilkini)
+    if (!degistirilecekBelge) {
+      alert('Değiştirilecek belge seçimi gerekli');
+      return;
+    }
+    
+    // Seçilen belgeyi veritabanından sil
     if (mevcutBasvuru?.belgeler) {
       const eskiBelgeler = mevcutBasvuru.belgeler.filter(b => b.tip === tip);
-      const eskiBelge = eskiBelgeler[0]; // Sadece ilk belgeyi al
+      const eskiBelge = eskiBelgeler[degistirilecekBelge.index]; // Seçilen index'teki belgeyi al
       
       console.log(`📋 ${tip} tipindeki eski belgeler:`, eskiBelgeler);
       console.log(`🎯 Silinecek eski belge:`, eskiBelge);
@@ -446,11 +453,26 @@ export function EtkinlikBasvuruFormu() {
       }
     }
     
-    // Eski belgeleri temizle ve yeni belgeyi ekle (belge değiştirme işlemi)
-    setBelgeler(prev => ({
-      ...prev,
-      [tip]: [{ file, note: '' }] // Eski belgeleri sil, sadece yeni belgeyi ekle
-    }));
+    // Sadece değiştirilen belgeyi güncelle
+    setBelgeler(prev => {
+      const mevcutBelgeler = prev[tip] || [];
+      const yeniBelgeler = [...mevcutBelgeler];
+      
+      // Eğer index mevcutsa değiştir, yoksa ekle
+      if (yeniBelgeler.length > degistirilecekBelge.index) {
+        yeniBelgeler[degistirilecekBelge.index] = { file, note: '' };
+      } else {
+        yeniBelgeler.push({ file, note: '' });
+      }
+      
+      return {
+        ...prev,
+        [tip]: yeniBelgeler
+      };
+    });
+    
+    // Seçimi temizle
+    setDegistirilecekBelge(null);
     
     // Geçici input temizliği
     setTimeout(() => {
@@ -1648,7 +1670,7 @@ export function EtkinlikBasvuruFormu() {
                                             <Info className="w-4 h-4" />
                                           </button>
                                         )}
-                                       <button type="button" onClick={() => handleBelgeDegistirSec(tip)} className="text-blue-600 hover:text-blue-700">Belgeyi Değiştir</button>
+                                       <button type="button" onClick={() => handleBelgeDegistirSec(tip, idx)} className="text-blue-600 hover:text-blue-700">Belgeyi Değiştir</button>
                                        {/* Gizli input (sadece değiştir akışı için) */}
                                        <input
                                          type="file"
