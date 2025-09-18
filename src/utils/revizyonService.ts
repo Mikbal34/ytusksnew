@@ -397,9 +397,39 @@ export const getRevizyonlar = async () => {
     throw error;
   }
 
-  return data?.map(revizyon => ({
-    ...revizyon,
-    etkinlikAdi: revizyon.etkinlik_basvurulari.etkinlik_adi,
-    kulupAdi: revizyon.etkinlik_basvurulari.kulupler.isim
-  })) || [];
+  // Her revizyon için konuşmacı ve sponsor detaylarını getir
+  const enrichedData = await Promise.all(
+    (data || []).map(async (revizyon) => {
+      let konusmaciDetaylari: any[] = [];
+      let sponsorDetaylari: any[] = [];
+
+      // Konuşmacı revizyonlarını getir
+      if (revizyon.revize_konusmaci) {
+        const { data: konusmaciData } = await supabase
+          .from('konusmaci_revizyonlari')
+          .select('*')
+          .eq('revizyon_id', revizyon.id);
+        konusmaciDetaylari = konusmaciData || [];
+      }
+
+      // Sponsor revizyonlarını getir
+      if (revizyon.revize_sponsor) {
+        const { data: sponsorData } = await supabase
+          .from('sponsor_revizyonlari')
+          .select('*')
+          .eq('revizyon_id', revizyon.id);
+        sponsorDetaylari = sponsorData || [];
+      }
+
+      return {
+        ...revizyon,
+        etkinlikAdi: revizyon.etkinlik_basvurulari.etkinlik_adi,
+        kulupAdi: revizyon.etkinlik_basvurulari.kulupler.isim,
+        konusmaciDetaylari,
+        sponsorDetaylari
+      };
+    })
+  );
+
+  return enrichedData;
 };

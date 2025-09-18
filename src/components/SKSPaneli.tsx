@@ -1100,21 +1100,49 @@ export const SKSPaneli: React.FC = () => {
                             <div className="flex-1">
                               <h5 className="font-medium text-gray-800">{revizyon.etkinlikAdi}</h5>
                               <p className="text-sm text-gray-600">{revizyon.kulupAdi}</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {revizyon.revize_gorsel && (
-                                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    📷 Görsel
-                                  </span>
+                              <div className="mt-2 space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                  {revizyon.revize_gorsel && (
+                                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      📷 Görsel
+                                    </span>
+                                  )}
+                                  {revizyon.revize_konusmaci && (
+                                    <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      👥 Konuşmacılar
+                                    </span>
+                                  )}
+                                  {revizyon.revize_sponsor && (
+                                    <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      🏢 Sponsorlar
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Konuşmacı Detayları */}
+                                {revizyon.revize_konusmaci && revizyon.konusmaciDetaylari && revizyon.konusmaciDetaylari.length > 0 && (
+                                  <div className="bg-purple-50 border border-purple-200 rounded p-2">
+                                    <div className="text-xs font-medium text-purple-800 mb-1">👥 Konuşmacı Değişiklikleri:</div>
+                                    {revizyon.konusmaciDetaylari.map((k: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-purple-700">
+                                        {k.islem === 'ekle' ? '✅ Eklendi: ' : '❌ Çıkarıldı: '}
+                                        {k.islem === 'ekle' ? `${k.yeni_ad} ${k.yeni_soyad}` : 'Mevcut konuşmacı'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
-                                {revizyon.revize_konusmaci && (
-                                  <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    👥 Konuşmacılar
-                                  </span>
-                                )}
-                                {revizyon.revize_sponsor && (
-                                  <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    🏢 Sponsorlar
-                                  </span>
+                                
+                                {/* Sponsor Detayları */}
+                                {revizyon.revize_sponsor && revizyon.sponsorDetaylari && revizyon.sponsorDetaylari.length > 0 && (
+                                  <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                                    <div className="text-xs font-medium text-orange-800 mb-1">🏢 Sponsor Değişiklikleri:</div>
+                                    {revizyon.sponsorDetaylari.map((s: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-orange-700">
+                                        {s.islem === 'ekle' ? '✅ Eklendi: ' : '❌ Çıkarıldı: '}
+                                        {s.islem === 'ekle' ? s.yeni_firma_adi : 'Mevcut sponsor'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                               {revizyon.aciklama && (
@@ -1168,21 +1196,49 @@ export const SKSPaneli: React.FC = () => {
                             <div className="flex-1">
                               <h5 className="font-medium text-gray-800">{revizyon.etkinlikAdi}</h5>
                               <p className="text-sm text-gray-600">{revizyon.kulupAdi}</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {revizyon.revize_gorsel && (
-                                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    📷 Görsel
-                                  </span>
+                              <div className="mt-2 space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                  {revizyon.revize_gorsel && (
+                                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      📷 Görsel
+                                    </span>
+                                  )}
+                                  {revizyon.revize_konusmaci && (
+                                    <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      👥 Konuşmacılar
+                                    </span>
+                                  )}
+                                  {revizyon.revize_sponsor && (
+                                    <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      🏢 Sponsorlar
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Konuşmacı Detayları */}
+                                {revizyon.revize_konusmaci && revizyon.konusmaciDetaylari && revizyon.konusmaciDetaylari.length > 0 && (
+                                  <div className="bg-purple-50 border border-purple-200 rounded p-2">
+                                    <div className="text-xs font-medium text-purple-800 mb-1">👥 Konuşmacı Değişiklikleri:</div>
+                                    {revizyon.konusmaciDetaylari.map((k: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-purple-700">
+                                        {k.islem === 'ekle' ? '✅ Eklendi: ' : '❌ Çıkarıldı: '}
+                                        {k.islem === 'ekle' ? `${k.yeni_ad} ${k.yeni_soyad}` : 'Mevcut konuşmacı'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
-                                {revizyon.revize_konusmaci && (
-                                  <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    👥 Konuşmacılar
-                                  </span>
-                                )}
-                                {revizyon.revize_sponsor && (
-                                  <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    🏢 Sponsorlar
-                                  </span>
+                                
+                                {/* Sponsor Detayları */}
+                                {revizyon.revize_sponsor && revizyon.sponsorDetaylari && revizyon.sponsorDetaylari.length > 0 && (
+                                  <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                                    <div className="text-xs font-medium text-orange-800 mb-1">🏢 Sponsor Değişiklikleri:</div>
+                                    {revizyon.sponsorDetaylari.map((s: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-orange-700">
+                                        {s.islem === 'ekle' ? '✅ Eklendi: ' : '❌ Çıkarıldı: '}
+                                        {s.islem === 'ekle' ? s.yeni_firma_adi : 'Mevcut sponsor'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500 mt-2">
@@ -1220,21 +1276,49 @@ export const SKSPaneli: React.FC = () => {
                             <div className="flex-1">
                               <h5 className="font-medium text-gray-800">{revizyon.etkinlikAdi}</h5>
                               <p className="text-sm text-gray-600">{revizyon.kulupAdi}</p>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {revizyon.revize_gorsel && (
-                                  <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    📷 Görsel
-                                  </span>
+                              <div className="mt-2 space-y-2">
+                                <div className="flex flex-wrap gap-2">
+                                  {revizyon.revize_gorsel && (
+                                    <span className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      📷 Görsel
+                                    </span>
+                                  )}
+                                  {revizyon.revize_konusmaci && (
+                                    <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      👥 Konuşmacılar
+                                    </span>
+                                  )}
+                                  {revizyon.revize_sponsor && (
+                                    <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                                      🏢 Sponsorlar
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* Konuşmacı Detayları */}
+                                {revizyon.revize_konusmaci && revizyon.konusmaciDetaylari && revizyon.konusmaciDetaylari.length > 0 && (
+                                  <div className="bg-purple-50 border border-purple-200 rounded p-2">
+                                    <div className="text-xs font-medium text-purple-800 mb-1">👥 Konuşmacı Değişiklikleri:</div>
+                                    {revizyon.konusmaciDetaylari.map((k: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-purple-700">
+                                        {k.islem === 'ekle' ? '✅ Eklendi: ' : '❌ Çıkarıldı: '}
+                                        {k.islem === 'ekle' ? `${k.yeni_ad} ${k.yeni_soyad}` : 'Mevcut konuşmacı'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
-                                {revizyon.revize_konusmaci && (
-                                  <span className="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    👥 Konuşmacılar
-                                  </span>
-                                )}
-                                {revizyon.revize_sponsor && (
-                                  <span className="bg-orange-100 text-orange-800 text-xs font-medium px-2.5 py-0.5 rounded">
-                                    🏢 Sponsorlar
-                                  </span>
+                                
+                                {/* Sponsor Detayları */}
+                                {revizyon.revize_sponsor && revizyon.sponsorDetaylari && revizyon.sponsorDetaylari.length > 0 && (
+                                  <div className="bg-orange-50 border border-orange-200 rounded p-2">
+                                    <div className="text-xs font-medium text-orange-800 mb-1">🏢 Sponsor Değişiklikleri:</div>
+                                    {revizyon.sponsorDetaylari.map((s: any, idx: number) => (
+                                      <div key={idx} className="text-xs text-orange-700">
+                                        {s.islem === 'ekle' ? '✅ Eklendi: ' : '❌ Çıkarıldı: '}
+                                        {s.islem === 'ekle' ? s.yeni_firma_adi : 'Mevcut sponsor'}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                               <p className="text-xs text-gray-500 mt-2">
