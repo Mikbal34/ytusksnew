@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CalendarClock, FileEdit, Eye, AlertCircle, CheckCircle, XCircle, Info, X } from 'lucide-react';
+import { FileEdit, Eye, AlertCircle, CheckCircle, XCircle, Info, X } from 'lucide-react';
 import { EtkinlikBasvuru } from '../types';
 import { revizeEt } from '../utils/supabaseStorage';
 import { RevizyonGecmisiModal } from './RevizyonGecmisiModal';
@@ -16,7 +16,6 @@ interface BasvuruKartProps {
 
 export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, showStatusBadges = false, showDetailedStatuses = false, showHeaderStatus = false, showDocumentStatuses = false }) => {
   const navigate = useNavigate();
-  const [isRevizing, setIsRevizing] = useState(false);
   const [revizeSecimAcik, setRevizeSecimAcik] = useState(false);
   const [showDocDetails, setShowDocDetails] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -56,7 +55,6 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
     console.log("Revize türü:", revizeTuru);
     console.log("Başvuru durumu:", basvuru.danismanOnay, basvuru.sksOnay);
     try {
-      setIsRevizing(true);
       console.log("Revize edilecek başvuru:", basvuru);
       
       // Başvuruyu revize moduna geçir (revizyon bayrağı henüz false)
@@ -81,8 +79,6 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
       console.error('Başvuru revize edilirken hata oluştu:', error);
       alert('Başvuru revize edilirken bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
       return null;
-    } finally {
-      setIsRevizing(false);
     }
   };
 
@@ -146,13 +142,6 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
 
   // Revize butonu artık her durumda tek bir buton olarak gösterilecek
 
-  const canEditBeforeAdvisorApproval = !basvuru.danismanOnay; // Danışman onayı yoksa düzenleme yapılabilir
-
-  const etkinlikOnayliBelgelerOnaysiz = basvuru.sksOnay?.durum === 'Onaylandı' && (
-    (basvuru.belgeler && basvuru.belgeler.some(d => d.sksOnay?.durum !== 'Onaylandı')) ||
-    (basvuru.ekBelgeler && basvuru.ekBelgeler.some(d => d.sksOnay?.durum !== 'Onaylandı'))
-  );
-
   return (
     <>
       {/* Belge Notu Popup Modal */}
@@ -214,30 +203,17 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
         {showHeaderStatus && getDurumBilgisi()}
       </div>
 
-      <div className="text-sm text-gray-600 mb-3">
-        <div className="flex items-center gap-1">
-          <CalendarClock className="w-4 h-4" />
-          <span>
-            {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 
-              ? new Date(basvuru.zamanDilimleri[0].baslangic).toLocaleDateString('tr-TR')
-              : basvuru.baslangicTarihi 
-                ? new Date(basvuru.baslangicTarihi).toLocaleDateString('tr-TR')
-                : 'Tarih belirtilmemiş'
-            }
-          </span>
-        </div>
-      </div>
 
       {showStatusBadges && !showDetailedStatuses && (
         <div className="flex flex-wrap gap-2 mb-3">
-          {/* Etkinlik Durum Badge (Unified Sistem) */}
-          {basvuru.durum === 'Onaylandı' ? (
+          {/* Etkinlik Durum Badge (JSONB Onay Sistemi) */}
+          {basvuru.danismanOnay?.durum === 'Onaylandı' && basvuru.sksOnay?.durum === 'Onaylandı' ? (
             <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-green-100 text-green-800">✅ Tam Onaylandı</span>
-          ) : basvuru.durum === 'Danışman Onaylandı' ? (
+          ) : basvuru.danismanOnay?.durum === 'Onaylandı' ? (
             <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">👨‍🏫 Danışman Onaylandı</span>
-          ) : basvuru.durum === 'SKS Onaylandı' ? (
+          ) : basvuru.sksOnay?.durum === 'Onaylandı' ? (
             <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-purple-100 text-purple-800">🏛️ SKS Onaylandı</span>
-          ) : basvuru.durum === 'Reddedildi' ? (
+          ) : basvuru.danismanOnay?.durum === 'Reddedildi' || basvuru.sksOnay?.durum === 'Reddedildi' ? (
             <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-red-100 text-red-800">❌ Reddedildi</span>
           ) : (
             <span className="inline-flex items-center text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-800">⏳ Beklemede</span>

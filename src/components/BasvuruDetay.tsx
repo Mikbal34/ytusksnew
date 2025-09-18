@@ -383,15 +383,38 @@ export function BasvuruDetay({
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Başlangıç Tarihi</label>
-            <div className="mt-1 text-gray-900">{basvuru.baslangicTarihi ? new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Bitiş Tarihi</label>
-            <div className="mt-1 text-gray-900">{basvuru.bitisTarihi ? new Date(basvuru.bitisTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
-          </div>
+        {/* Zaman Dilimleri */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Etkinlik Zaman Dilimleri</label>
+          {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 ? (
+            <div className="space-y-2">
+              {basvuru.zamanDilimleri.map((zaman, index) => (
+                <div 
+                  key={index} 
+                  className="flex items-center gap-4 bg-blue-50 border border-blue-200 rounded-lg p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-blue-800">
+                      {index + 1}. Zaman Dilimi:
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <div className="text-sm">
+                      <strong>Başlangıç:</strong> {new Date(zaman.baslangic).toLocaleString('tr-TR')}
+                    </div>
+                    <span className="text-gray-400">→</span>
+                    <div className="text-sm">
+                      <strong>Bitiş:</strong> {new Date(zaman.bitis).toLocaleString('tr-TR')}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm">
+              Zaman dilimi belirtilmemiş
+            </div>
+          )}
         </div>
 
         {basvuru.sponsorlar && basvuru.sponsorlar.length > 0 && (
