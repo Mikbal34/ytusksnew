@@ -163,14 +163,15 @@ export const SKSPaneli: React.FC = () => {
 
   const handleBelgeIndir = async (dosya: string, dosyaAdi: string) => {
     try {
+      console.log('🔍 Belge indirme:', { dosya, dosyaAdi });
+      if (!dosya || dosya.trim() === '') {
+        console.error('❌ Boş dosya yolu!');
+        alert('Belge dosya yolu bulunamadı. Lütfen sistem yöneticisine başvurun.');
+        return;
+      }
       const downloadUrl = await etkinlikBelgeIndir(dosya);
       if (downloadUrl) {
-        const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = dosyaAdi;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        window.open(downloadUrl, '_blank');
       } else {
         alert('Belge indirilemedi. Lütfen daha sonra tekrar deneyin.');
       }
@@ -588,22 +589,6 @@ export const SKSPaneli: React.FC = () => {
                           )}
                         </div>
                         <p className="text-sm text-gray-600 mt-1">{basvuru.kulupAdi}</p>
-                        <div className="text-sm text-gray-600 mt-1">
-                          {basvuru.zamanDilimleri && basvuru.zamanDilimleri.length > 0 ? (
-                            basvuru.zamanDilimleri.map((zaman, index) => (
-                              <div key={index}>
-                                <div>Başlangıç: {new Date(zaman.baslangic).toLocaleString('tr-TR')}</div>
-                                <div>Bitiş: {new Date(zaman.bitis).toLocaleString('tr-TR')}</div>
-                                {basvuru.zamanDilimleri!.length > 1 && index < basvuru.zamanDilimleri!.length - 1 && <hr className="my-1" />}
-                              </div>
-                            ))
-                          ) : (
-                            <div>
-                              <div>Başlangıç: {basvuru.baslangicTarihi ? new Date(basvuru.baslangicTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
-                              <div>Bitiş: {basvuru.bitisTarihi ? new Date(basvuru.bitisTarihi).toLocaleString('tr-TR') : 'Belirtilmemiş'}</div>
-                            </div>
-                          )}
-                        </div>
                         
                         {/* Eğer reddedilmiş veya onaylanmamış belge varsa uyarı göster */}
                         {hasRejectedDocuments && (

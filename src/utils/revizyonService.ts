@@ -11,6 +11,7 @@ export type RevizyonSecimleri = {
   gorsel?: boolean;
   konusmaci?: boolean;
   sponsor?: boolean;
+  belgeler?: boolean;
 };
 
 export type KonusmaciDelta =
@@ -20,6 +21,13 @@ export type KonusmaciDelta =
 export type SponsorDelta =
   | { islem: 'ekle'; yeni_firma_adi: string; yeni_detay?: string | null }
   | { islem: 'cikar'; hedef_sponsor_id: string };
+
+export type BelgeDelta = {
+  hedef_belge_id: string;
+  belge_tipi: string;
+  yeni_dosya: File;
+  belge_notu?: string;
+};
 
 // Revizyon üst kaydı oluştur
 export const createRevizyon = async (
@@ -35,6 +43,7 @@ export const createRevizyon = async (
     revize_gorsel: !!secimler.gorsel,
     revize_konusmaci: !!secimler.konusmaci,
     revize_sponsor: !!secimler.sponsor,
+    revize_belgeler: !!secimler.belgeler,
     durum: 'beklemede',
     danisman_onay: null as OnayJson,
     sks_onay: null as OnayJson,
@@ -164,6 +173,65 @@ export const addSponsorRevizyonlari = async (
   if (error) throw new Error(`Sponsor revizyonları eklenemedi: ${error.message}`);
 };
 
+// Belge revizyonu ekle: pending klasörüne yükle ve kayıt oluştur
+export const addBelgeRevizyonlari = async (
+  revizyonId: string,
+  basvuruId: string,
+  belgeler: BelgeDelta[]
+): Promise<void> => {
+  if (!belgeler || belgeler.length === 0) return;
+
+  // Başvurudan kulüp ID al
+  const { data: basvuru, error: bErr } = await supabaseAdmin
+    .from('etkinlik_basvurulari')
+    .select('kulup_id')
+    .eq('id', basvuruId)
+    .single();
+  if (bErr) throw new Error(`Başvuru bilgisi alınamadı: ${bErr.message}`);
+
+  const kulupId: string = basvuru.kulup_id;
+
+  for (const belge of belgeler) {
+    // Hedef belgenin bilgilerini al
+    const { data: eskiBelge, error: ebErr } = await supabaseAdmin
+      .from('etkinlik_belgeleri')
+      .select('dosya_yolu, tip')
+      .eq('id', belge.hedef_belge_id)
+      .single();
+    if (ebErr) throw new Error(`Belge bilgisi alınamadı: ${ebErr.message}`);
+
+    // Güvenli dosya adı
+    const normalize = (s: string) => s
+      .replace(/\s+/g, '_')
+      .replace(/ı/g, 'i').replace(/ğ/g, 'g').replace(/ü/g, 'u')
+      .replace(/ş/g, 's').replace(/ö/g, 'o').replace(/ç/g, 'c');
+
+    const safeName = normalize(belge.yeni_dosya.name);
+    const pendingPath = `pending/${kulupId}/${basvuruId}/belgeler/${Date.now()}_${safeName}`;
+
+    // Yükle (pending altına)
+    const { data: uploadData, error: uErr } = await supabase.storage
+      .from('etkinlik-belgeleri')
+      .upload(pendingPath, belge.yeni_dosya, { contentType: 'application/pdf', upsert: false });
+    if (uErr) throw new Error(`Belge yüklenemedi: ${uErr.message}`);
+
+    // Revizyon belge kaydı ekle
+    const { error: brErr } = await supabaseAdmin
+      .from('etkinlik_belge_revizyonlari')
+      .insert({
+        revizyon_id: revizyonId,
+        basvuru_id: basvuruId,
+        hedef_belge_id: belge.hedef_belge_id,
+        eski_path: eskiBelge.dosya_yolu,
+        yeni_gecici_path: uploadData.path,
+        final_path: null,
+        belge_tipi: belge.belge_tipi,
+        belge_notu: belge.belge_notu || null
+      });
+    if (brErr) throw new Error(`Belge revizyon kaydı eklenemedi: ${brErr.message}`);
+  }
+};
+
 // Revizyonu onayla/red et ve gerekiyorsa uygula
 export const onaylaRevizyon = async (
   revizyonId: string,
@@ -242,7 +310,7 @@ export const uygulaRevizyon = async (revizyonId: string): Promise<void> => {
   // Üst kayıt ve alt kayıtları getir
   const { data: revizyon, error: rErr } = await supabaseAdmin
     .from('etkinlik_revizyonlari')
-    .select('id, basvuru_id, revize_gorsel, revize_konusmaci, revize_sponsor')
+    .select('id, basvuru_id, revize_gorsel, revize_konusmaci, revize_sponsor, revize_belgeler')
     .eq('id', revizyonId)
     .single();
   if (rErr) throw new Error(`Revizyon bulunamadı: ${rErr.message}`);
@@ -259,6 +327,10 @@ export const uygulaRevizyon = async (revizyonId: string): Promise<void> => {
 
   if (revizyon.revize_sponsor) {
     await applySponsorDeltas(revizyonId, basvuruId);
+  }
+
+  if (revizyon.revize_belgeler) {
+    await applyBelgeDeltas(revizyonId, basvuruId);
   }
 };
 
@@ -314,13 +386,29 @@ async function finalizeGorsel(revizyonId: string, basvuruId: string): Promise<vo
 }
 
 async function temizlePendingGorseller(revizyonId: string): Promise<void> {
-  const { data, error } = await supabaseAdmin
+  // Görsel pending'leri temizle
+  const { data: gorselData, error: gErr } = await supabaseAdmin
     .from('etkinlik_gorsel_revizyonlari')
     .select('yeni_gecici_path')
     .eq('revizyon_id', revizyonId);
-  if (error) return;
-  const paths = (data || []).map(r => r.yeni_gecici_path).filter(Boolean);
-  if (paths.length > 0) await supabaseAdmin.storage.from('etkinlik-gorselleri').remove(paths);
+  if (!gErr && gorselData) {
+    const gorselPaths = gorselData.map(r => r.yeni_gecici_path).filter(Boolean);
+    if (gorselPaths.length > 0) {
+      await supabaseAdmin.storage.from('etkinlik-gorselleri').remove(gorselPaths);
+    }
+  }
+
+  // Belge pending'leri temizle
+  const { data: belgeData, error: bErr } = await supabaseAdmin
+    .from('etkinlik_belge_revizyonlari')
+    .select('yeni_gecici_path')
+    .eq('revizyon_id', revizyonId);
+  if (!bErr && belgeData) {
+    const belgePaths = belgeData.map(r => r.yeni_gecici_path).filter(Boolean);
+    if (belgePaths.length > 0) {
+      await supabaseAdmin.storage.from('etkinlik-belgeleri').remove(belgePaths);
+    }
+  }
 }
 
 async function applyKonusmaciDeltas(revizyonId: string, basvuruId: string): Promise<void> {
@@ -375,6 +463,68 @@ async function applySponsorDeltas(revizyonId: string, basvuruId: string): Promis
         .eq('basvuru_id', basvuruId);
       if (delErr) throw new Error(`Sponsor silinemedi: ${delErr.message}`);
     }
+  }
+}
+
+async function applyBelgeDeltas(revizyonId: string, basvuruId: string): Promise<void> {
+  // Belge revizyon kayıtlarını al
+  const { data: belgeRows, error: brErr } = await supabaseAdmin
+    .from('etkinlik_belge_revizyonlari')
+    .select('*')
+    .eq('revizyon_id', revizyonId)
+    .order('created_at', { ascending: true });
+  if (brErr) throw new Error(`Belge revizyonları alınamadı: ${brErr.message}`);
+
+  // Kulüp ID al
+  const { data: basvuru, error: bErr } = await supabaseAdmin
+    .from('etkinlik_basvurulari')
+    .select('kulup_id')
+    .eq('id', basvuruId)
+    .single();
+  if (bErr) throw new Error(`Kulüp bilgisi alınamadı: ${bErr.message}`);
+
+  const kulupId: string = basvuru.kulup_id;
+
+  for (const br of belgeRows || []) {
+    if (!br.yeni_gecici_path) continue;
+
+    const fileName = br.yeni_gecici_path.split('/').pop() as string;
+    const finalPath = `${kulupId}/${basvuruId}/belgeler/${fileName}`;
+
+    // Supabase storage'da move yok; copy + delete yap
+    const { error: copyErr } = await supabaseAdmin.storage
+      .from('etkinlik-belgeleri')
+      .copy(br.yeni_gecici_path, finalPath);
+    if (copyErr) throw new Error(`Belge kopyalanamadı: ${copyErr.message}`);
+
+    // Pending'i sil
+    await supabaseAdmin.storage.from('etkinlik-belgeleri').remove([br.yeni_gecici_path]);
+
+    // Eski belgeyi sil (varsa)
+    if (br.eski_path) {
+      await supabaseAdmin.storage.from('etkinlik-belgeleri').remove([br.eski_path]);
+    }
+
+    // Hedef belge kaydını güncelle
+    if (br.hedef_belge_id) {
+      const { error: upErr } = await supabaseAdmin
+        .from('etkinlik_belgeleri')
+        .update({
+          dosya_yolu: finalPath,
+          belge_notu: br.belge_notu,
+          danisman_onay: null, // Yeni belge olduğu için onayları sıfırla
+          sks_onay: null,
+          durum: 'Beklemede'
+        })
+        .eq('id', br.hedef_belge_id);
+      if (upErr) throw new Error(`Belge kaydı güncellenemedi: ${upErr.message}`);
+    }
+
+    // Belge revizyon satırına final_path yaz
+    await supabaseAdmin
+      .from('etkinlik_belge_revizyonlari')
+      .update({ final_path: finalPath })
+      .eq('id', br.id);
   }
 }
 

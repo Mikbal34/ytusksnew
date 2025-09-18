@@ -191,7 +191,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
     const basvurular: EtkinlikBasvuru[] = data.map(basvuru => {
       // Zaman dilimleri
       const zamanDilimleri = basvuru.etkinlik_zaman_dilimleri && basvuru.etkinlik_zaman_dilimleri.length > 0
-        ? basvuru.etkinlik_zaman_dilimleri.map((z: any) => ({ baslangic: z.baslangic, bitis: z.bitis }))
+        ? basvuru.etkinlik_zaman_dilimleri.map((z: { baslangic: string; bitis: string }) => ({ baslangic: z.baslangic, bitis: z.bitis }))
         : (basvuru.baslangic_tarihi && basvuru.bitis_tarihi) 
           ? [{ baslangic: basvuru.baslangic_tarihi, bitis: basvuru.bitis_tarihi }]
           : [];
@@ -200,7 +200,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
       // Belgeler - unified sistem ile uyumlu
       // Belgeler - JSONB onay sistemi
       const belgeler = basvuru.etkinlik_belgeleri
-        ? basvuru.etkinlik_belgeleri.map((belge: any) => ({
+        ? basvuru.etkinlik_belgeleri.map((belge: { id: number; tip: string; dosya_yolu: string; dosya_adi: string; belge_notu?: string; danisman_onay?: { durum: string; tarih: string; redSebebi?: string } | null; sks_onay?: { durum: string; tarih: string; redSebebi?: string } | null }) => ({
             id: belge.id,
             tip: belge.tip,
             dosya: belge.dosya_yolu,
@@ -214,7 +214,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
       
       // Ek Belgeler - JSONB onay sistemi
       const ekBelgeler = basvuru.ek_belgeler
-        ? basvuru.ek_belgeler.map((belge: any) => ({
+        ? basvuru.ek_belgeler.map((belge: { id: number; etkinlik_id: number; tip: string; dosya_yolu: string; dosya_adi: string; olusturma_tarihi: string; aciklama?: string; danisman_onay?: { durum: string; tarih: string; redSebebi?: string } | null; sks_onay?: { durum: string; tarih: string; redSebebi?: string } | null }) => ({
             id: belge.id,
             etkinlikId: belge.etkinlik_id,
             tip: belge.tip,
@@ -235,7 +235,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
       
       // Konuşmacılar
       const konusmacilar = basvuru.konusmacilar
-        ? basvuru.konusmacilar.map((konusmaci: any) => ({
+        ? basvuru.konusmacilar.map((konusmaci: { id: number; ad_soyad: string; ozgecmis: string; aciklama: string }) => ({
             id: konusmaci.id,
             adSoyad: konusmaci.ad_soyad,
             ozgecmis: konusmaci.ozgecmis,
@@ -245,7 +245,7 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
       
       // Sponsorlar
       const sponsorlar = basvuru.sponsorlar
-        ? basvuru.sponsorlar.map((sponsor: any) => ({
+        ? basvuru.sponsorlar.map((sponsor: { id: number; firma_adi: string; detay: string }) => ({
             id: sponsor.id,
             firmaAdi: sponsor.firma_adi,
             detay: sponsor.detay
@@ -354,7 +354,7 @@ export const getBasvurularSKSOptimized = async (limit: number = 100, offset: num
         sks_onay,
         created_at,
         kulupler!inner(isim),
-        etkinlik_belgeleri(id, tip, danisman_onay, sks_onay),
+        etkinlik_belgeleri(id, tip, danisman_onay, sks_onay, dosya_adi, dosya_yolu, belge_notu),
         ek_belgeler(id, tip, danisman_onay, sks_onay, olusturma_tarihi),
         etkinlik_zaman_dilimleri(baslangic, bitis)
       `)
@@ -372,27 +372,28 @@ export const getBasvurularSKSOptimized = async (limit: number = 100, offset: num
     const basvurular: EtkinlikBasvuru[] = data.map(basvuru => {
       // Zaman dilimleri
       const zamanDilimleri = basvuru.etkinlik_zaman_dilimleri && basvuru.etkinlik_zaman_dilimleri.length > 0
-        ? basvuru.etkinlik_zaman_dilimleri.map((z: any) => ({ baslangic: z.baslangic, bitis: z.bitis }))
+        ? basvuru.etkinlik_zaman_dilimleri.map((z: { baslangic: string; bitis: string }) => ({ baslangic: z.baslangic, bitis: z.bitis }))
         : [];
       
       // Kulüp adı
-      const kulupAdi = (basvuru.kulupler as any)?.isim || 'Bilinmeyen Kulüp';
+      const kulupAdi = (basvuru.kulupler as { isim: string } | null)?.isim || 'Bilinmeyen Kulüp';
       
-      // OPTIMIZE: Sadece onay durumları için belgeler
+      // OPTIMIZE: Belgeler - SKS indirme için dosya bilgileri gerekli
       const belgeler = basvuru.etkinlik_belgeleri
-        ? basvuru.etkinlik_belgeleri.map((belge: any) => ({
+        ? basvuru.etkinlik_belgeleri.map((belge: { id: number; tip: string; dosya_yolu: string; dosya_adi: string; belge_notu?: string; danisman_onay?: { durum: string; tarih: string; redSebebi?: string } | null; sks_onay?: { durum: string; tarih: string; redSebebi?: string } | null }) => ({
             id: belge.id,
             tip: belge.tip,
-            dosya: '', // OPTIMIZE: Dosya yolu gerekmiyor
-            dosyaAdi: '', // OPTIMIZE: Dosya adı gerekmiyor
+            dosya: belge.dosya_yolu || '',
+            dosyaAdi: belge.dosya_adi || '',
             danismanOnay: belge.danisman_onay,
-            sksOnay: belge.sks_onay
+            sksOnay: belge.sks_onay,
+            belgeNotu: belge.belge_notu
           }))
         : [];
       
       // OPTIMIZE: Ek belgeler için sadece temel bilgiler
       const ekBelgeler = basvuru.ek_belgeler
-        ? basvuru.ek_belgeler.map((belge: any) => ({
+        ? basvuru.ek_belgeler.map((belge: { id: number; etkinlik_id: number; tip: string; dosya_yolu: string; dosya_adi: string; olusturma_tarihi: string; aciklama?: string; danisman_onay?: { durum: string; tarih: string; redSebebi?: string } | null; sks_onay?: { durum: string; tarih: string; redSebebi?: string } | null }) => ({
             id: belge.id,
             etkinlikId: basvuru.id,
             tip: belge.tip,
@@ -459,7 +460,14 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
         etkinlik_zaman_dilimleri (*)
       `)
       .eq('id', id)
-      .single();
+      .single()
+      .then(result => {
+        // Cache-bust için timestamp ekle
+        if (result.data) {
+          result.data._cache_bust = Date.now();
+        }
+        return result;
+      });
     
     if (error) {
       console.error('Başvuru getirilemedi:', error);
@@ -467,6 +475,16 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
     }
 
     console.log('Başvuru başarıyla getirildi.');
+    console.log('📋 Gelen belgeler:', data.etkinlik_belgeleri?.length || 0, 'adet');
+    (data.etkinlik_belgeleri || []).forEach((belge, index) => {
+      console.log(`📄 Belge ${index + 1}:`, {
+        id: belge.id,
+        tip: belge.tip,
+        dosya_adi: belge.dosya_adi,
+        dosya_yolu: belge.dosya_yolu,
+        danisman_onay: belge.danisman_onay
+      });
+    });
     
     // Onay geçmişini ayrı sorgu ile al (unified sistem)
     const { data: onayGecmisiData } = await client
@@ -517,7 +535,7 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
     const kulupAdi = data.kulupler ? data.kulupler.isim : 'Bilinmeyen Kulüp';
     
     const zamanDilimleri = data.etkinlik_zaman_dilimleri && data.etkinlik_zaman_dilimleri.length > 0
-      ? data.etkinlik_zaman_dilimleri.map((z: any) => ({ baslangic: z.baslangic, bitis: z.bitis }))
+      ? data.etkinlik_zaman_dilimleri.map((z: { baslangic: string; bitis: string }) => ({ baslangic: z.baslangic, bitis: z.bitis }))
       : (data.baslangic_tarihi && data.bitis_tarihi) 
         ? [{ baslangic: data.baslangic_tarihi, bitis: data.bitis_tarihi }]
         : [];
@@ -545,49 +563,34 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
       orijinalBasvuruId: data.orijinal_basvuru_id,
       danismanOnay: sonDanismanOnayi,
       sksOnay: sonSksOnayi,
-      sponsorlar: data.sponsorlar ? data.sponsorlar.map((sponsor: any) => ({
+      sponsorlar: data.sponsorlar ? data.sponsorlar.map((sponsor: { firma_adi: string; detay: string }) => ({
         firmaAdi: sponsor.firma_adi,
         detay: sponsor.detay
       })) : [],
-      konusmacilar: data.konusmacilar ? data.konusmacilar.map((konusmaci: any) => ({
+      konusmacilar: data.konusmacilar ? data.konusmacilar.map((konusmaci: { ad_soyad: string; ozgecmis: string; aciklama: string }) => ({
         adSoyad: konusmaci.ad_soyad,
         ozgecmis: konusmaci.ozgecmis,
         aciklama: konusmaci.aciklama
       })) : [],
-      belgeler: data.etkinlik_belgeleri ? await Promise.all(
-        data.etkinlik_belgeleri.map(async (belge: any) => {
-          // Belge onaylarını onay_gecmisi'nden al
-          const { data: belgeOnaylari } = await client
-            .from('onay_gecmisi')
-            .select('onay_tipi, durum, tarih, red_sebebi')
-            .eq('onay_kategorisi', 'Belge')
-            .eq('belge_id', belge.id)
-            .eq('belge_tipi', 'etkinlik_belgeleri');
-
-          const danismanOnay = belgeOnaylari?.find(o => o.onay_tipi === 'Danışman');
-          const sksOnay = belgeOnaylari?.find(o => o.onay_tipi === 'SKS');
-
-          return {
+      belgeler: data.etkinlik_belgeleri ? data.etkinlik_belgeleri.map((belge: { id: number; tip: string; dosya_yolu: string; dosya_adi: string; belge_notu?: string; danisman_onay?: { durum: string; tarih: string; redSebebi?: string } | null; sks_onay?: { durum: string; tarih: string; redSebebi?: string } | null }) => ({
         id: belge.id,
         tip: belge.tip,
         dosya: belge.dosya_yolu,
         dosyaAdi: belge.dosya_adi,
-            danismanOnay: danismanOnay ? {
-              durum: danismanOnay.durum,
-              tarih: danismanOnay.tarih,
-              redSebebi: danismanOnay.red_sebebi
-            } : undefined,
-            sksOnay: sksOnay ? {
-              durum: sksOnay.durum,
-              tarih: sksOnay.tarih,
-              redSebebi: sksOnay.red_sebebi
-            } : undefined,
-            // durum kolonu kaldırıldı - JSONB onay sistemi kullanılıyor
-          };
-        })
-      ) : [],
+        danismanOnay: belge.danisman_onay ? {
+          durum: belge.danisman_onay.durum,
+          tarih: belge.danisman_onay.tarih,
+          redSebebi: belge.danisman_onay.redSebebi
+        } : undefined,
+        sksOnay: belge.sks_onay ? {
+          durum: belge.sks_onay.durum,
+          tarih: belge.sks_onay.tarih,
+          redSebebi: belge.sks_onay.redSebebi
+        } : undefined,
+        belgeNotu: belge.belge_notu
+      })) : [],
       ekBelgeler: data.ek_belgeler ? await Promise.all(
-        data.ek_belgeler.map(async (belge: any) => {
+        data.ek_belgeler.map(async (belge: { id: number; etkinlik_id: number; tip: string; dosya_yolu: string; dosya_adi: string; olusturma_tarihi: string; aciklama?: string }) => {
           // Ek belge onaylarını onay_gecmisi'nden al
           const { data: belgeOnaylari } = await client
             .from('onay_gecmisi')
@@ -708,7 +711,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       const onaylayanId = userData?.user?.id;
       
       // Güncelleme verisi hazırla
-      let updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       
       if (basvuru.danismanOnay) {
         updateData.danisman_onay = {
@@ -912,9 +915,9 @@ export const clearStorage = async () => {
           console.log(`✅ ${data?.length || 0} ${tableName} kaydı silindi`);
           return { table: tableName, success: true, count: data?.length || 0 };
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(`❌ ${tableName} temizleme hatası:`, err);
-        return { table: tableName, success: false, error: err?.message || err };
+        return { table: tableName, success: false, error: err instanceof Error ? err.message : String(err) };
       }
     };
 
@@ -958,7 +961,7 @@ export const clearStorage = async () => {
       .from('etkinlik_basvurulari')
         .select('*', { count: 'exact', head: true });
       console.log(`\n📊 İşlem sonrası kalan başvuru sayısı: ${finalCount || 0}`);
-    } catch (finalError) {
+    } catch {
       console.log('Final kontrol yapılamadı');
     }
     
@@ -1073,7 +1076,7 @@ export const revizeEt = async (basvuru: EtkinlikBasvuru, revizeTuru?: 'belgeler'
     // 2️⃣ REVIZE TÜRÜNE GÖRE ONAY DURUMLARI BELİRLE
     // ⚠️ ARTIK HİÇBİR ZAMAN HEMEN REVİZYON İŞARETLEMİYORUZ!
     // Revizyon işareti sadece kullanıcı gerçekten değişiklik yapıp submit ettiğinde konur
-    let updateData: any = {
+    const updateData: Record<string, unknown> = {
       // revizyon: true, // ❌ KALDIRILDI - Sadece form submit'te yapılacak
     };
     
@@ -1527,6 +1530,7 @@ export interface EtkinlikBelgeUpload {
   tip: string;
   basvuruId: string;
   belgeNotu?: string; // Kullanıcının bıraktığı not
+  belgeId?: string; // Mevcut belgeyi güncellemek için
 }
 
 export interface EtkinlikGorseliUpload {
@@ -1791,15 +1795,37 @@ Bu sorunu çözmek için sistem yöneticinize başvurun ve şu izinleri kontrol 
       console.log('Belge başarıyla yüklendi:', data.path);
       
       // Etkinlik belgeleri tablosuna kaydet - İzin sorunlarını önlemek için admin client kullan
-      const { error: dbError } = await supabaseAdmin
-        .from('etkinlik_belgeleri')
-        .insert({
-          basvuru_id: belge.basvuruId,
-          tip: belge.tip,
-          dosya_adi: belge.dosyaAdi,
-          dosya_yolu: data.path,
-          belge_notu: belge.belgeNotu || null
-        });
+      let dbError: Error | null = null;
+
+      if (belge.belgeId) {
+        // Mevcut belgeyi güncelle
+        const { data: updateData, error } = await supabaseAdmin
+          .from('etkinlik_belgeleri')
+          .update({
+            dosya_adi: belge.dosyaAdi,
+            dosya_yolu: data.path,
+            belge_notu: belge.belgeNotu || null,
+            danisman_onay: null, // Yeni belge olduğu için onayları sıfırla
+            sks_onay: null
+          })
+          .eq('id', belge.belgeId)
+          .select();
+
+        console.log('📄 Belge güncellendi:', updateData);
+        dbError = error;
+      } else {
+        // Yeni belge ekle
+        const { error } = await supabaseAdmin
+          .from('etkinlik_belgeleri')
+          .insert({
+            basvuru_id: belge.basvuruId,
+            tip: belge.tip,
+            dosya_adi: belge.dosyaAdi,
+            dosya_yolu: data.path,
+            belge_notu: belge.belgeNotu || null
+          });
+        dbError = error;
+      }
       
       if (dbError) {
         console.error('Belge bilgisi kaydedilirken hata:', dbError);
@@ -2094,9 +2120,9 @@ export const ekBelgeSil = async (belgeId: string, dosyaYolu: string): Promise<bo
 
 // Akıllı belge güncelleme - sadece değişenleri güncelle
 const updateBesvuruBelgeleri = async (
-  basvuruId: string, 
-  belgeler: EtkinlikBelge[], 
-  client: any
+  basvuruId: string,
+  belgeler: EtkinlikBelge[],
+  client: typeof supabase | typeof supabaseAdmin
 ): Promise<void> => {
   if (belgeler && belgeler.length > 0) {
     console.log('🔄 Belgeler akıllı güncelleniyor:', belgeler.length, 'adet');
@@ -2117,7 +2143,7 @@ const updateBesvuruBelgeleri = async (
         const yeniBelgeYolu = yeniBelge.dosya;
         
         // Aynı tipte mevcut belge var mı?
-        const mevcutBelge = mevcutBelgeler?.find((m: any) => m.tip === yeniBelgeTip);
+        const mevcutBelge = mevcutBelgeler?.find((m: { tip: string; dosya_adi: string; dosya_yolu: string; id: number }) => m.tip === yeniBelgeTip);
         
         if (mevcutBelge) {
           // Aynı belge mi yoksa yeni bir belge mi?
@@ -2534,7 +2560,7 @@ export const createTestEkBelge = async (etkinlikId: string) => {
 };
 
 // Tekrarlanan onay kayıtlarını temizle
-export const temizleTekrarOnaylari = async (): Promise<{ silinmis: number, hata: any }> => {
+export const temizleTekrarOnaylari = async (): Promise<{ silinmis: number, hata: Error | null }> => {
   try {
     console.log('Tekrarlanan onay kayıtları temizleniyor...');
     

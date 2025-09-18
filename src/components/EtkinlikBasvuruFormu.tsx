@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, X, Upload, Info, Image } from 'lucide-react';
 import { EtkinlikBasvuru, Sponsor, Konusmaci, EtkinlikBelge, Kulup, OnayDurumu } from '../types';
 import { saveBasvuru, getBasvuruById, updateBasvuru, etkinlikBelgeYukle, getKulupler, etkinlikBelgeSil, etkinlikGorseliYukle, etkinlikGorseliIndir } from '../utils/supabaseStorage';
+import { supabase } from '../utils/supabase';
 import { BasvuruDetay } from './BasvuruDetay';
 import { useAuth } from '../context/AuthContext';
 import { sendEtkinlikBasvuruNotification } from '../utils/emailService';
@@ -77,11 +78,11 @@ export function EtkinlikBasvuruFormu() {
   const [belgeler, setBelgeler] = useState<{ [key: string]: SelectedBelge[] }>({});
   const [geciciBelge, setGeciciBelge] = useState<{ [key: string]: File | null }>({});
   const [geciciNot, setGeciciNot] = useState<{ [key: string]: string }>({});
-  // const [mevcutBelgeler, setMevcutBelgeler] = useState<EtkinlikBelge[]>([]);
   const belgeInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   // Mevcut belge satırındaki "Belgeyi Değiştir" aksiyonu için ayrı input ve index takibi
   const belgeReplaceInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
-  const [degistirilecekBelge, setDegistirilecekBelge] = useState<{tip: EtkinlikBelge['tip'], index: number} | null>(null);
+  const [degistirilecekBelge, setDegistirilecekBelge] = useState<{tip: EtkinlikBelge['tip'], index: number, belgeId?: string} | null>(null);
+  const [belgeDegisenler, setBelgeDegisenler] = useState<{[belgeId: string]: File}>({});
 
   // Tarih girişleri için yıl aralığını sınırla
   const MIN_YEAR = 2000;
@@ -250,7 +251,7 @@ export function EtkinlikBasvuruFormu() {
     };
     
     fetchBasvuru();
-  }, [basvuruId]);
+  }, [basvuruId, revizeModu]);
 
   useEffect(() => {
     const fetchKulupler = async () => {
@@ -394,8 +395,8 @@ export function EtkinlikBasvuruFormu() {
   };
 
   // Mevcut belgeyi "değiştir" akışı: hangi belgenin değiştirileceğini belirle
-  const handleBelgeDegistirSec = (tip: EtkinlikBelge['tip'], belgeIndex: number) => {
-    setDegistirilecekBelge({tip, index: belgeIndex});
+  const handleBelgeDegistirSec = (tip: EtkinlikBelge['tip'], belgeIndex: number, belgeId?: string) => {
+    setDegistirilecekBelge({tip, index: belgeIndex, belgeId});
     belgeReplaceInputRefs.current[tip]?.click();
   };
 
@@ -404,76 +405,23 @@ export function EtkinlikBasvuruFormu() {
     if (!file) return;
     if (file.type !== 'application/pdf') { alert('Lütfen PDF yükleyin'); return; }
     if (file.size > 5 * 1024 * 1024) { alert('Dosya boyutu 5MBı aşmamalı'); return; }
-    
-    if (!degistirilecekBelge) {
+
+    if (!degistirilecekBelge || !degistirilecekBelge.belgeId) {
       alert('Değiştirilecek belge seçimi gerekli');
       return;
     }
-    
-    // Seçilen belgeyi veritabanından sil
-    if (mevcutBasvuru?.belgeler) {
-      const eskiBelgeler = mevcutBasvuru.belgeler.filter(b => b.tip === tip);
-      const eskiBelge = eskiBelgeler[degistirilecekBelge.index]; // Seçilen index'teki belgeyi al
-      
-      console.log(`📋 ${tip} tipindeki eski belgeler:`, eskiBelgeler);
-      console.log(`🎯 Silinecek eski belge:`, eskiBelge);
-      
-      if (eskiBelge && eskiBelge.id) {
-        try {
-          const dosyaYolu = typeof eskiBelge.dosya === 'string' ? eskiBelge.dosya : '';
-          console.log(`🔄 Eski belge siliniyor:`, {
-            id: eskiBelge.id,
-            tip: eskiBelge.tip,
-            dosyaAdi: eskiBelge.dosyaAdi,
-            dosyaYolu: dosyaYolu,
-            dosyaYoluUzunluk: dosyaYolu ? dosyaYolu.length : 0,
-            dosyaYoluTipi: typeof eskiBelge.dosya
-          });
-          const silindi = await etkinlikBelgeSil(eskiBelge.id, dosyaYolu);
-          if (silindi) {
-            console.log('Eski belge veritabanından başarıyla silindi');
-            // Başvuruyu yeniden yükle ve state'i güncelle
-            if (basvuruId) {
-              try {
-                const guncelBasvuru = await getBasvuruById(basvuruId);
-                if (guncelBasvuru) {
-                  setMevcutBasvuru(guncelBasvuru);
-                }
-              } catch (refreshError) {
-                console.error('Başvuru yeniden yüklenirken hata:', refreshError);
-              }
-            }
-          } else {
-            console.error('Eski belge silinemedi');
-          }
-        } catch (error) {
-          console.error('Eski belge silinirken hata:', error);
-          // Hata olsa da devam et
-        }
-      }
-    }
-    
-    // Sadece değiştirilen belgeyi güncelle
-    setBelgeler(prev => {
-      const mevcutBelgeler = prev[tip] || [];
-      const yeniBelgeler = [...mevcutBelgeler];
-      
-      // Eğer index mevcutsa değiştir, yoksa ekle
-      if (yeniBelgeler.length > degistirilecekBelge.index) {
-        yeniBelgeler[degistirilecekBelge.index] = { file, note: '' };
-      } else {
-        yeniBelgeler.push({ file, note: '' });
-      }
-      
-      return {
-        ...prev,
-        [tip]: yeniBelgeler
-      };
-    });
-    
+
+    // State'e ekle - form submit'te işlenecek
+    setBelgeDegisenler(prev => ({
+      ...prev,
+      [degistirilecekBelge.belgeId]: file
+    }));
+
+    console.log(`📝 Belge değişikliği kaydedildi: ${tip} - ${file.name}`);
+
     // Seçimi temizle
     setDegistirilecekBelge(null);
-    
+
     // Geçici input temizliği
     setTimeout(() => {
       if (belgeReplaceInputRefs.current[tip]) {
@@ -787,6 +735,92 @@ export function EtkinlikBasvuruFormu() {
         }
       }
       
+      // Değişen belgeler varsa işle
+      const belgeDegisenlerKeys = Object.keys(belgeDegisenler);
+      if (belgeDegisenlerKeys.length > 0) {
+        try {
+          console.log('📝 Belgeler değiştiriliyor...', belgeDegisenlerKeys);
+
+          for (const belgeId of belgeDegisenlerKeys) {
+            const yeniDosya = belgeDegisenler[belgeId];
+
+            // Eski belgeyi bul
+            const eskiBelge = mevcutBasvuru?.belgeler?.find(b => b.id === belgeId);
+            if (!eskiBelge) {
+              console.error(`❌ Eski belge bulunamadı: ${belgeId}`);
+              continue;
+            }
+
+            console.log(`🔄 Belge değiştiriliyor: ${eskiBelge.dosyaAdi} -> ${yeniDosya.name}`);
+
+            try {
+              // Yeni belgeyi yükle
+              const kulupSlug = toSlug(kulup.isim);
+              const etkinlikSlug = toSlug(formData.etkinlikAdi);
+              const belgeTur = tipToSlug(eskiBelge.tip);
+              const tarih = formatTodayDDMMYYYY();
+              const dosyaAdi = `${kulupSlug}_${etkinlikSlug}_${belgeTur}_${tarih}`;
+
+              const dosyaYolu = await etkinlikBelgeYukle({
+                dosya: yeniDosya,
+                dosyaAdi,
+                tip: eskiBelge.tip,
+                basvuruId,
+                belgeId // Mevcut belge ID'sini güncelle
+              });
+
+              if (dosyaYolu) {
+                console.log(`✅ Yeni belge yüklendi: ${dosyaAdi} -> ${dosyaYolu}`);
+
+                // Eski dosyayı storage'dan sil (sadece başarılı olduktan sonra)
+                const eskiDosyaYolu = typeof eskiBelge.dosya === 'string' ? eskiBelge.dosya : '';
+                if (eskiDosyaYolu) {
+                  try {
+                    // Sadece storage'dan sil
+                    await supabase.storage.from('etkinlik-belgeleri').remove([eskiDosyaYolu]);
+                    console.log(`🗑️ Eski dosya silindi: ${eskiDosyaYolu}`);
+                  } catch (silmeHata) {
+                    console.warn(`⚠️ Eski dosya silinemedi (önemli değil): ${silmeHata}`);
+                  }
+                }
+              } else {
+                console.error(`❌ Belge yüklenemedi: ${dosyaAdi}`);
+                setError(`Belge güncellenemedi: ${eskiBelge.tip}`);
+                setLoading(false);
+                return;
+              }
+            } catch (error) {
+              console.error(`❌ Belge değiştirme hatası:`, error);
+              setError(`Belge güncellenemedi: ${eskiBelge.tip}`);
+              setLoading(false);
+              return;
+            }
+          }
+
+          console.log('✅ Tüm belgeler başarıyla güncellendi');
+
+          // Başvuruyu yeniden yükle (state refresh için)
+          try {
+            const guncelBasvuru = await getBasvuruById(basvuruId);
+            if (guncelBasvuru) {
+              setMevcutBasvuru(guncelBasvuru);
+              console.log('🔄 Başvuru state\'i yenilendi');
+            }
+          } catch (refreshError) {
+            console.warn('⚠️ Başvuru state yenilenemedi:', refreshError);
+          }
+
+          // Belge değişiklikleri state'ini temizle
+          setBelgeDegisenler({});
+
+        } catch (err) {
+          console.error('Belgeler güncellenirken hata:', err);
+          setError('Belgeler güncellenemedi.');
+          setLoading(false);
+          return;
+        }
+      }
+
       // Belgeleri yükle
       const yuklenenBelgePaths: EtkinlikBelge[] = [];
       for (const tip of Object.keys(belgeler)) {
@@ -1024,8 +1058,16 @@ export function EtkinlikBasvuruFormu() {
               {mevcutBasvuru?.revizyon ? 'Başvuru Revizyonu' : 'Yeni Etkinlik Başvurusu'}
             </h1>
             {revizeModu && (
-              <div className="mt-2 text-xs text-gray-600">
-                Görünüm: {belgelerRevizeModu && !etkinlikRevizeModu ? 'Sadece Belgeler' : etkinlikRevizeModu && !belgelerRevizeModu ? 'Sadece Etkinlik Bilgileri' : 'Etkinlik + Belgeler'}
+              <div className="mt-2 text-xs text-gray-600 flex items-center gap-2">
+                <span>Görünüm: {belgelerRevizeModu && !etkinlikRevizeModu ? 'Sadece Belgeler' : etkinlikRevizeModu && !belgelerRevizeModu ? 'Sadece Etkinlik Bilgileri' : 'Etkinlik + Belgeler'}</span>
+                <button
+                  type="button"
+                  onClick={() => window.location.reload()}
+                  className="text-blue-600 hover:text-blue-700 text-xs underline"
+                  title="Sayfayı yenile"
+                >
+                  🔄 Yenile
+                </button>
               </div>
             )}
           </div>
@@ -1649,7 +1691,7 @@ export function EtkinlikBasvuruFormu() {
                                   return st === 'Onaylandı' ? 'bg-green-100 text-green-800' : st === 'Reddedildi' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800';
                                 };
                                 return (
-                                  <div key={idx} className={`flex items-center justify-between border rounded-md px-3 py-2 text-xs ${cls}`}>
+                                  <div key={b.id || idx} className={`flex items-center justify-between border rounded-md px-3 py-2 text-xs ${cls}`}>
                                     <div className="min-w-0">
                                       <div className="truncate text-gray-800 font-medium">{b.dosyaAdi}</div>
                                       {/* Belge notu kaldırıldı - artık popup'ta gösterilecek */}
@@ -1670,7 +1712,12 @@ export function EtkinlikBasvuruFormu() {
                                             <Info className="w-4 h-4" />
                                           </button>
                                         )}
-                                       <button type="button" onClick={() => handleBelgeDegistirSec(tip, idx)} className="text-blue-600 hover:text-blue-700">Belgeyi Değiştir</button>
+                                       <button type="button" onClick={() => handleBelgeDegistirSec(tip, idx, b.id)} className="text-blue-600 hover:text-blue-700">
+                                         Belgeyi Değiştir
+                                         {belgeDegisenler[b.id || ''] && (
+                                           <span className="ml-2 text-xs text-yellow-600">({belgeDegisenler[b.id || ''].name})</span>
+                                         )}
+                                       </button>
                                        {/* Gizli input (sadece değiştir akışı için) */}
                                        <input
                                          type="file"

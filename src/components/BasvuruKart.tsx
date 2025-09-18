@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileEdit, Eye, AlertCircle, CheckCircle, XCircle, Info, X } from 'lucide-react';
 import { EtkinlikBasvuru } from '../types';
-import { revizeEt } from '../utils/supabaseStorage';
+import { revizeEt, getBasvuruById } from '../utils/supabaseStorage';
 import { RevizyonGecmisiModal } from './RevizyonGecmisiModal';
 
 interface BasvuruKartProps {
@@ -56,9 +56,18 @@ export const BasvuruKart: React.FC<BasvuruKartProps> = ({ basvuru, onRevize, sho
     console.log("Başvuru durumu:", basvuru.danismanOnay, basvuru.sksOnay);
     try {
       console.log("Revize edilecek başvuru:", basvuru);
-      
+
+      // Önce güncel başvuruyu çek (cache sorunu için)
+      console.log("📡 Güncel başvuru verisi çekiliyor...");
+      const guncelBasvuru = await getBasvuruById(basvuru.id);
+      if (!guncelBasvuru) {
+        console.error("❌ Güncel başvuru çekilemedi");
+        return;
+      }
+      console.log("✅ Güncel başvuru alındı:", guncelBasvuru);
+
       // Başvuruyu revize moduna geçir (revizyon bayrağı henüz false)
-      const yeniBasvuru = await revizeEt(basvuru, revizeTuru);
+      const yeniBasvuru = await revizeEt(guncelBasvuru, revizeTuru);
       console.log("Başvuru revize moduna geçirildi:", yeniBasvuru);
       console.log("⚠️ Revizyon durumu:", yeniBasvuru.revizyon, "(Henüz false - gerçek değişiklik yapılınca true olacak)");
       console.log("Danışman onayı:", yeniBasvuru.danismanOnay);

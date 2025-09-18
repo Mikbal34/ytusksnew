@@ -507,7 +507,11 @@ export function BasvuruDetay({
                     {renderOnayDurumu(belge.id!, belge)}
                     
                     <button
-                      onClick={() => onBelgeIndir?.(typeof belge.dosya === 'string' ? belge.dosya : '', belge.dosyaAdi)}
+                      onClick={() => {
+                        console.log('🔍 Belge tıklandı:', belge);
+                        const dosyaYolu = belge.dosya || belge.dosyaYolu || '';
+                        onBelgeIndir?.(dosyaYolu, belge.dosyaAdi);
+                      }}
                       className="p-1 text-gray-600 hover:text-gray-900"
                     >
                       <FileDown className="w-5 h-5" />
