@@ -274,6 +274,13 @@ export const getBasvurular = async (): Promise<EtkinlikBasvuru[]> => {
       // bu başvuru henüz danışman tarafından incelenmemiş demektir
       // Bu durumda danismanOnay alanını undefined yapmalıyız ki danışmanın onay listesine düşsün
       
+      // Debug: Görsel verisi kontrolü
+      if (basvuru.etkinlik_gorseli) {
+        console.log(`🖼️ Başvuru ${basvuru.id} (${basvuru.etkinlik_adi}) - Görsel VAR: ${basvuru.etkinlik_gorseli}`);
+      } else {
+        console.log(`❌ Başvuru ${basvuru.id} (${basvuru.etkinlik_adi}) - Görsel YOK`);
+      }
+
       return {
         id: basvuru.id,
         kulupId: basvuru.kulup_id,
@@ -532,6 +539,7 @@ export const getBasvuruById = async (id: string): Promise<EtkinlikBasvuru | null
       bitisTarihi: zamanDilimleri.length > 0 ? zamanDilimleri[zamanDilimleri.length - 1].bitis : data.bitis_tarihi,
       zamanDilimleri,
       aciklama: data.aciklama,
+      etkinlikGorseli: data.etkinlik_gorseli || undefined,
       durum: data.durum,
       revizyon: data.revizyon,
       orijinalBasvuruId: data.orijinal_basvuru_id,
@@ -1579,8 +1587,24 @@ export const etkinlikGorseliYukle = async (
     
     // Oturum kontrolü
     const { data: sessionData } = await supabase.auth.getSession();
+    console.log('📧 Oturum kontrolü:', sessionData.session ? 'VAR' : 'YOK');
     if (!sessionData.session) {
       throw new Error('Oturum açık değil');
+    }
+    
+    // Kullanıcı rolü kontrolü
+    const { data: userData } = await supabase.auth.getUser();
+    console.log('👤 Kullanıcı ID:', userData.user?.id);
+    
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('role, kulup_id')
+      .eq('id', userData.user?.id)
+      .single();
+    
+    console.log('🔑 Kullanıcı profili:', profileData);
+    if (profileError) {
+      console.error('❌ Profil hatası:', profileError);
     }
     
     // Dosya yolunu hazırla
@@ -1614,6 +1638,11 @@ export const etkinlikGorseliYukle = async (
     const dosyaYolu = `${kulupId}/${gorsel.basvuruId}/gorseller/${Date.now()}_${safeFileName}`;
     
     // Görseli yükle
+    console.log('📤 Storage upload başlıyor...');
+    console.log('📍 Dosya yolu:', dosyaYolu);
+    console.log('📁 Bucket: etkinlik-gorselleri');
+    console.log('📄 Content-Type:', gorsel.dosya.type);
+    
     const { data, error } = await supabase.storage
       .from('etkinlik-gorselleri')
       .upload(dosyaYolu, gorsel.dosya, {
@@ -1623,7 +1652,11 @@ export const etkinlikGorseliYukle = async (
       });
     
     if (error) {
-      console.error('Görsel yükleme hatası:', error);
+      console.error('❌ Görsel yükleme hatası:', error);
+      console.error('❌ Hata detayları:', {
+        message: error.message,
+        name: error.name
+      });
       throw new Error(`Görsel yüklenemedi: ${error.message}`);
     }
     
