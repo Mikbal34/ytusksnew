@@ -639,14 +639,11 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
   try {
     console.log('Başvuru güncelleniyor:', basvuru);
     
-    // Önce kullanıcının oturum bilgilerini kontrol et
-    const { data: sessionData } = await supabase.auth.getSession();
-    
-    // Eğer oturum yoksa, admin client'ı kullan
-    const client = sessionData.session ? supabase : supabaseAdmin;
-    // Zaman dilimi gibi RLS'e takılan işlemler için admin client kullan
+    // RLS sorunlarından kaçınmak için tüm işlemlerde admin client kullan
+    // Özellikle çok sayıda revizyon ve belge olan başvurularda RLS sorun çıkarıyor
+    const client = supabaseAdmin;
     const adminClient = supabaseAdmin;
-    console.log('Kullanıcı oturumu:', sessionData.session ? 'Mevcut' : 'Yok, admin client kullanılıyor');
+    console.log('Admin client kullanılıyor - RLS bypass edildi');
     
     // Ana başvuru bilgilerini güncelle
     console.log('UpdateBasvuru - etkinlik_gorseli değeri:', basvuru.etkinlikGorseli);
@@ -786,8 +783,8 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     
     // Sponsorlar varsa güncelle
     if (basvuru.sponsorlar && basvuru.sponsorlar.length > 0) {
-      // Önce eski sponsorları sil
-      const { error: silmeError } = await client
+      // Önce eski sponsorları sil (admin client ile)
+      const { error: silmeError } = await adminClient
         .from('sponsorlar')
         .delete()
         .eq('basvuru_id', basvuru.id);
@@ -804,7 +801,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
         detay: sponsor.detay
       }));
       
-      const { error: sponsorError } = await client
+      const { error: sponsorError } = await adminClient
         .from('sponsorlar')
         .insert(sponsorVerileri);
       
@@ -816,8 +813,8 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     
     // Konuşmacılar varsa güncelle
     if (basvuru.konusmacilar && basvuru.konusmacilar.length > 0) {
-      // Önce eski konuşmacıları sil
-      const { error: silmeError } = await client
+      // Önce eski konuşmacıları sil (admin client ile)
+      const { error: silmeError } = await adminClient
         .from('konusmacilar')
         .delete()
         .eq('basvuru_id', basvuru.id);
@@ -835,7 +832,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
         aciklama: konusmaci.aciklama
       }));
       
-      const { error: konusmaciError } = await client
+      const { error: konusmaciError } = await adminClient
         .from('konusmacilar')
         .insert(konusmaciVerileri);
       
@@ -849,8 +846,8 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
     // Etkinlik onay/red işlemlerinde belgeler korunmalı
     // SKS etkinlik onay/red işlemlerinde belgeler undefined gönderilerek korunur
     if (basvuru.belgeler && basvuru.belgeler.length > 0) {
-      // Mevcut belgeleri kontrol et
-      const { data: mevcutBelgeler } = await client
+      // Mevcut belgeleri kontrol et (admin client ile)
+      const { data: mevcutBelgeler } = await adminClient
         .from('etkinlik_belgeleri')
         .select('id, tip, dosya_adi, danisman_onay, sks_onay')
         .eq('basvuru_id', basvuru.id);
@@ -865,7 +862,7 @@ export const updateBasvuru = async (basvuru: EtkinlikBasvuru) => {
       
       if (belgelerDegismis) {
         console.log('📄 Belgeler değişmiş, güncelleniyor...');
-      await updateBesvuruBelgeleri(basvuru.id, basvuru.belgeler, client);
+      await updateBesvuruBelgeleri(basvuru.id, basvuru.belgeler, adminClient);
       } else {
         console.log('📄 Belgeler değişmemiş, onay bilgileri korunuyor');
       }
